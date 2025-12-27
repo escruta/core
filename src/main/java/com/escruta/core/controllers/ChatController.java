@@ -36,6 +36,17 @@ class ChatController {
             4. Focus on directly answering the user's question with the information from the sources
             """;
 
+    private static final String UNIFIED_SUMMARY_SYSTEM_MESSAGE = """
+            You are a helpful AI assistant that creates simple summaries.
+            
+            RULES:
+            1. Keep summaries SHORT and SIMPLE
+            2. Use plain, easy-to-understand language
+            3. Focus on the most important information only
+            4. Write 2-3 clear sentences maximum
+            5. NO citations, references, or complex formatting
+            """;
+
     private final SourceService sourceService;
     private final RetrievalService retrievalService;
     private final ChatModel chatModel;
@@ -49,7 +60,7 @@ class ChatController {
                 SummaryResponse summary = ChatClient.create(chatModel)
                         .prompt()
                         .advisors(retrievalService.getQuestionAnswerAdvisor(notebookId))
-                        .system(UNIFIED_SYSTEM_MESSAGE)
+                        .system(UNIFIED_SUMMARY_SYSTEM_MESSAGE)
                         .user("I want you to summarize the key information in 2 or 3 sentences, and I want that summary to be clear, complete, and free of citations or references.")
                         .call()
                         .entity(SummaryResponse.class);
