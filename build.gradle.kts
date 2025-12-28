@@ -2,6 +2,7 @@ plugins {
     java
     id("org.springframework.boot") version "3.5.6"
     id("io.spring.dependency-management") version "1.1.7"
+    id("org.graalvm.buildtools.native") version "0.11.1"
 }
 val springAiVersion by extra("1.0.3")
 
@@ -18,6 +19,10 @@ repositories {
     mavenCentral()
 }
 
+configurations.all {
+    exclude(group = "org.eclipse.angus", module = "angus-activation")
+}
+
 dependencies {
     implementation("org.jsoup:jsoup:1.20.1")
     implementation("org.springframework.boot:spring-boot-starter")
@@ -31,6 +36,7 @@ dependencies {
     implementation("org.springframework.ai:spring-ai-tika-document-reader")
     implementation("org.springframework.ai:spring-ai-advisors-vector-store")
     implementation("org.springframework.ai:spring-ai-starter-model-chat-memory-repository-jdbc")
+    implementation("jakarta.activation:jakarta.activation-api:2.1.4")
     compileOnly("org.projectlombok:lombok:1.18.30")
     annotationProcessor("org.projectlombok:lombok:1.18.30")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
@@ -40,9 +46,18 @@ dependencies {
     runtimeOnly("org.postgresql:postgresql")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
+
 dependencyManagement {
     imports {
         mavenBom("org.springframework.ai:spring-ai-bom:$springAiVersion")
+    }
+}
+
+graalvmNative {
+    binaries {
+        named("main") {
+            buildArgs.add("-H:+ReportExceptionStackTraces")
+        }
     }
 }
 
