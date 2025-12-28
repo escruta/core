@@ -118,7 +118,7 @@ class ChatController {
             }
         } catch (Exception e) {
             System.out.println("Error during example questions generation: " + e.getMessage());
-            return ResponseEntity.internalServerError().body(List.of());
+            return ResponseEntity.internalServerError().body("An error occurred while generating the questions. Please try again.");
         }
     }
 
