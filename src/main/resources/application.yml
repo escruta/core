@@ -12,9 +12,7 @@ spring:
       max-request-size: 50MB
       enabled: true
   datasource:
-    url: ${ESCRUTA_DATABASE_URL:jdbc:postgresql://localhost:5432/escruta}
-    username: ${ESCRUTA_DATABASE_USERNAME:postgres}
-    password: ${ESCRUTA_DATABASE_PASSWORD:1234}
+    url: ${ESCRUTA_DATABASE_URL:jdbc:postgresql://localhost:5432/escruta?user=postgres&password=1234}
   jpa:
     hibernate:
       ddl-auto: update
