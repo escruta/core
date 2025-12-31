@@ -26,6 +26,11 @@ public class NotebookOwnershipInterceptor implements HandlerInterceptor {
     ) {
         @SuppressWarnings("unchecked") Map<String, String> pathVariables = (Map<String, String>) request.getAttribute(
                 HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
+
+        if (pathVariables == null) {
+            return true;
+        }
+
         String notebookId = pathVariables.get("notebookId");
 
         if (notebookId != null && !ownershipService.isUserNotebookOwner(UUID.fromString(notebookId))) {

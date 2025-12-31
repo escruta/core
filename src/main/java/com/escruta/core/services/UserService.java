@@ -1,6 +1,7 @@
 package com.escruta.core.services;
 
 import com.escruta.core.dtos.ChangePasswordDto;
+import com.escruta.core.dtos.RegisterUserDto;
 import com.escruta.core.entities.User;
 import com.escruta.core.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -8,6 +9,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
@@ -19,24 +21,37 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
 
     public UUID getUserId() {
-        Authentication authentication = SecurityContextHolder.getContext()
-                .getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof User user) {
-            return user.getId();
-        }
-        return null;
+        var user = getCurrentFullUser();
+        return (user != null) ?
+                user.getId() :
+                null;
     }
 
     public User getCurrentFullUser() {
-        Authentication authentication = SecurityContextHolder.getContext()
+        Authentication authentication = SecurityContextHolder
+                .getContext()
                 .getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof User) {
-            return (User) authentication.getPrincipal();
-        } else if (authentication != null && authentication.getName() != null) {
-            return userRepository.findByEmail(authentication.getName())
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return null;
+        }
+
+        if (authentication.getPrincipal() instanceof OAuth2AuthenticatedPrincipal principal) {
+            String email = principal.getAttribute("sub");
+            return userRepository
+                    .findByEmail(email)
                     .orElse(null);
         }
+
         return null;
+    }
+
+    public User register(RegisterUserDto input) {
+        var user = new User();
+        user.setFullName(input.getFullName());
+        user.setEmail(input.getEmail());
+        user.setPassword(passwordEncoder.encode(input.getPassword()));
+        return userRepository.save(user);
     }
 
     public void changeName(String newName) {

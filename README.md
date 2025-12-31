@@ -2,10 +2,12 @@
 
 _"Think, ask, learn"_
 
-**Escruta Core** is the core engine of the Escruta research assistant platform. Built with Java and Spring Boot, it handles the business logic, document processing, AI orchestration, and persistent storage for your research data.
+**Escruta Core** is the core engine of the Escruta research assistant platform. Built with Java and Spring Boot, it
+handles the business logic, document processing, AI orchestration, and persistent storage for your research data.
 
 > [!IMPORTANT]
-> This backend service is a central part of the Escruta ecosystem. It requires a PostgreSQL database with the `pgvector` extension and access to an OpenAI-compatible API to function correctly.
+> This backend service is a central part of the Escruta ecosystem. It requires a PostgreSQL database with the `pgvector`
+> extension and access to an OpenAI-compatible API to function correctly.
 
 ## Technology Stack
 
@@ -13,7 +15,7 @@ _"Think, ask, learn"_
 - **Framework**: Spring Boot 3.5 for robust backend development.
 - **AI Integration**: Spring AI for seamless interaction with Large Language Models.
 - **Database**: PostgreSQL with `pgvector` for search and vector similarity.
-- **Security**: Spring Security with JWT for stateless authentication.
+- **Security**: Spring Security (OAuth 2.0 Resource Server Opaque Token) for stateless authentication.
 - **Object Mapping**: Project Lombok to reduce boilerplate code.
 
 ## Getting Started
@@ -40,15 +42,15 @@ The backend service will be available at [localhost:8080](http://localhost:8080)
 
 ### Environment Variables
 
-The application can be configured using environment variables. These can be set in your shell or passed to the application at runtime.
+The application can be configured using environment variables. These can be set in your shell or passed to the
+application at runtime.
 
 | Variable                          | Description                             | Default                                    |
-| --------------------------------- | --------------------------------------- | ------------------------------------------ |
+|-----------------------------------|-----------------------------------------|--------------------------------------------|
 | `ESCRUTA_PORT`                    | Port where the backend service will run | `8080`                                     |
 | `ESCRUTA_DATABASE_URL`            | JDBC URL for the PostgreSQL database    | `jdbc:postgresql://localhost:5432/escruta` |
 | `ESCRUTA_DATABASE_USERNAME`       | Database username                       | `postgres`                                 |
 | `ESCRUTA_DATABASE_PASSWORD`       | Database password                       | `1234`                                     |
-| `ESCRUTA_JWT_SECRET`              | Secret key for signing JWT tokens       | (Required)                                 |
 | `ESCRUTA_AI_BASE_URL`             | Base URL for the AI provider            | (Required)                                 |
 | `ESCRUTA_AI_API_KEY`              | API Key for the AI provider             | (Required)                                 |
 | `ESCRUTA_AI_MODEL`                | AI model to use for chat                | (Required)                                 |

@@ -3,6 +3,9 @@ server:
 spring:
   application:
     name: Escruta Core
+  web:
+    resources:
+      add-mappings: true
   servlet:
     multipart:
       max-file-size: 50MB
@@ -47,9 +50,8 @@ spring:
         remove-existing-vector-store-table: false
         max-document-batch-size: 1000
 security:
-  jwt:
-    secret-key: ${ESCRUTA_JWT_SECRET}
-    expiration-time: 3600000
+  session:
+    expiration-interval-seconds: 3600
   cors:
     allowedOrigins: ${ESCRUTA_CORS_ALLOWED_ORIGINS:http://localhost:5173}
     allowedMethods: GET,POST,PUT,DELETE,OPTIONS

@@ -1,6 +1,5 @@
 package com.escruta.core.exceptions;
 
-import io.jsonwebtoken.ExpiredJwtException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -15,8 +14,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-import java.security.SignatureException;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -26,28 +25,36 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<String> handleAccessDenied(AccessDeniedException ex) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
                 .body(ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<String> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
-        if (ex.getName()
-                .equals("notebookId") && ex.getRequiredType() != null && ex.getRequiredType()
+        if (ex
+                .getName()
+                .equals("notebookId") && ex.getRequiredType() != null && ex
+                .getRequiredType()
                 .equals(UUID.class)) {
             String errorMessage = "Invalid format for notebookId. It must be a valid UUID.";
-            return ResponseEntity.badRequest()
+            return ResponseEntity
+                    .badRequest()
                     .body(errorMessage);
         }
 
         assert ex.getRequiredType() != null;
+        var parameterName = ex.getName();
+        var parameterType = ex
+                .getRequiredType()
+                .getSimpleName();
         String defaultError = String.format(
                 "Parameter '%s' is not of the required type '%s'.",
-                ex.getName(),
-                ex.getRequiredType()
-                        .getSimpleName()
+                parameterName,
+                parameterType
         );
-        return ResponseEntity.badRequest()
+        return ResponseEntity
+                .badRequest()
                 .body(defaultError);
     }
 
@@ -55,11 +62,20 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleSecurityException(Exception exception) {
         ProblemDetail errorDetail = null;
 
-        logger.debug(exception.getMessage(), exception);
+        String message = (exception != null) ?
+                exception.getMessage() :
+                "Internal Server Error";
+        logger.debug(message, exception);
 
         if (exception instanceof BadCredentialsException) {
             errorDetail = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(401), exception.getMessage());
             errorDetail.setProperty("description", "The email or password is incorrect");
+            return errorDetail;
+        }
+
+        if (exception instanceof NoResourceFoundException) {
+            errorDetail = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(404), message);
+            errorDetail.setProperty("description", "The requested route is not available");
             return errorDetail;
         }
 
@@ -78,23 +94,13 @@ public class GlobalExceptionHandler {
             errorDetail.setProperty("description", "You are not authorized to access this resource");
         }
 
-        if (exception instanceof SignatureException) {
-            errorDetail = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(403), exception.getMessage());
-            errorDetail.setProperty("description", "The JWT signature is invalid");
-        }
-
-        if (exception instanceof ExpiredJwtException) {
-            errorDetail = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(403), exception.getMessage());
-            errorDetail.setProperty("description", "The JWT token has expired");
-        }
-
         if (exception instanceof MethodArgumentNotValidException) {
             errorDetail = handleValidationException((MethodArgumentNotValidException) exception);
             return errorDetail;
         }
 
         if (errorDetail == null) {
-            errorDetail = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(500), exception.getMessage());
+            errorDetail = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(500), message);
             errorDetail.setProperty("description", "Unknown internal server error.");
         }
 
@@ -102,7 +108,8 @@ public class GlobalExceptionHandler {
     }
 
     private ProblemDetail handleValidationException(MethodArgumentNotValidException ex) {
-        String errors = ex.getBindingResult()
+        String errors = ex
+                .getBindingResult()
                 .getFieldErrors()
                 .stream()
                 .map(fieldError -> String.format("'%s' %s", fieldError.getField(), fieldError.getDefaultMessage()))
