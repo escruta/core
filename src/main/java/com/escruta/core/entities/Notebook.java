@@ -8,6 +8,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.sql.Timestamp;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -33,6 +34,12 @@ public class Notebook {
 
     @Column(columnDefinition = "TEXT")
     private String summary;
+
+    @OneToMany(mappedBy = "notebook", cascade = CascadeType.REMOVE, orphanRemoval = true)
+    private List<Source> sources;
+
+    @OneToMany(mappedBy = "notebook", cascade = CascadeType.REMOVE, orphanRemoval = true)
+    private List<Note> notes;
 
     @CreationTimestamp
     @Column(updatable = false)

@@ -32,6 +32,9 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private String password;
 
+    @OneToMany(mappedBy = "user", cascade = CascadeType.REMOVE, orphanRemoval = true)
+    private List<Notebook> notebooks;
+
     @CreationTimestamp
     @Column(updatable = false)
     private Timestamp createdAt;
