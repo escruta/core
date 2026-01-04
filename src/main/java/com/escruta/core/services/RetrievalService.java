@@ -1,6 +1,5 @@
 package com.escruta.core.services;
 
-import com.escruta.core.entities.Source;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.document.Document;
@@ -19,8 +18,10 @@ public class RetrievalService {
     private final VectorStore vectorStore;
 
     public QuestionAnswerAdvisor getQuestionAnswerAdvisor(UUID notebookId) {
-        return QuestionAnswerAdvisor.builder(vectorStore)
-                .searchRequest(SearchRequest.builder()
+        return QuestionAnswerAdvisor
+                .builder(vectorStore)
+                .searchRequest(SearchRequest
+                        .builder()
                         .topK(3)
                         .filterExpression(new Filter.Expression(
                                 Filter.ExpressionType.EQ,
@@ -33,38 +34,49 @@ public class RetrievalService {
 
     public void deleteIndexedSource(UUID sourceId) {
         try {
-            Filter.Expression filterExpression = new Filter.Expression(
+            vectorStore.delete(new Filter.Expression(
                     Filter.ExpressionType.EQ,
                     new Filter.Key("sourceId"),
                     new Filter.Value(sourceId.toString())
-            );
-            vectorStore.delete(filterExpression);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to delete indexed source: " + e.getMessage(), e);
+            ));
+        } catch (Exception ignored) {
         }
     }
 
-    public void indexSourceChunk(UUID notebookId, Source source, Document chunk, int chunkIndex) {
+    public void indexSourceChunk(
+            UUID notebookId,
+            UUID sourceId,
+            String title,
+            String link,
+            Document chunk,
+            int chunkIndex
+    ) {
         try {
+            String text = chunk.getText() != null ?
+                    chunk.getText() :
+                    "";
             Document document = new Document(
-                    UUID.randomUUID()
-                            .toString(), chunk.getFormattedContent(), Map.of(
+                    UUID
+                            .randomUUID()
+                            .toString(), text, Map.of(
                     "sourceId",
-                    source.getId()
-                            .toString(),
+                    sourceId.toString(),
                     "notebookId",
                     notebookId.toString(),
                     "title",
-                    source.getTitle() != null ? source.getTitle() : "Untitled",
+                    title != null ?
+                            title :
+                            "Untitled",
                     "link",
-                    source.getLink() != null ? source.getLink() : "",
+                    link != null ?
+                            link :
+                            "",
                     "chunkIndex",
                     String.valueOf(chunkIndex)
             )
             );
             vectorStore.add(List.of(document));
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to index source chunk: " + e.getMessage(), e);
+        } catch (Exception ignored) {
         }
     }
 }

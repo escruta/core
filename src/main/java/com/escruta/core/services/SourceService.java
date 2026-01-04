@@ -44,21 +44,26 @@ public class SourceService {
 
     private WebContent fetchWebContent(String url) {
         try {
-            var doc = Jsoup.connect(url)
+            var doc = Jsoup
+                    .connect(url)
                     .get();
             String title = doc.title();
 
-            if (title.trim()
+            if (title
+                    .trim()
                     .isEmpty()) {
-                title = doc.select("meta[property=og:title]")
+                title = doc
+                        .select("meta[property=og:title]")
                         .attr("content");
             }
-            if (title.trim()
+            if (title
+                    .trim()
                     .isEmpty()) {
                 title = generateDefaultTitle(url);
             }
 
-            String textContent = doc.body()
+            String textContent = doc
+                    .body()
                     .text();
             return new WebContent(title.trim(), textContent);
         } catch (IOException e) {
@@ -77,12 +82,14 @@ public class SourceService {
         try {
             UserMessage userMessage = new UserMessage(rawContent);
             Prompt prompt = new Prompt(List.of(new SystemMessage(systemPrompt), userMessage));
-            return chatModel.call(prompt)
+            return chatModel
+                    .call(prompt)
                     .getResult()
                     .getOutput()
                     .getText();
         } catch (Exception e) {
-            return rawContent.replaceAll("(?m)^[ \t]*\r?\n", "")
+            return rawContent
+                    .replaceAll("(?m)^[ \t]*\r?\n", "")
                     .trim();
         }
     }
@@ -101,7 +108,8 @@ public class SourceService {
     }
 
     public List<SourceResponseDTO> getSources(UUID notebookId) {
-        return sourceRepository.findByNotebookId(notebookId)
+        return sourceRepository
+                .findByNotebookId(notebookId)
                 .stream()
                 .map(SourceResponseDTO::new)
                 .toList();
@@ -112,7 +120,8 @@ public class SourceService {
         if (source.isEmpty() || !notebookRepository.existsById(notebookId)) {
             return null;
         }
-        return source.map(SourceWithContentDTO::new)
+        return source
+                .map(SourceWithContentDTO::new)
                 .orElse(null);
     }
 
@@ -132,7 +141,8 @@ public class SourceService {
 
             assert notebookOptional.isPresent();
             Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get(), content, aiConverter);
-            if (source.getTitle() == null || source.getTitle()
+            if (source.getTitle() == null || source
+                    .getTitle()
                     .trim()
                     .isEmpty()) {
                 source.setTitle(webContent.title());
@@ -142,7 +152,13 @@ public class SourceService {
 
             generateAndSetSummary(source);
 
-            asyncVectorIndexingService.indexSourceInVectorStore(notebookId, source, content);
+            asyncVectorIndexingService.indexSourceInVectorStore(
+                    notebookId,
+                    source.getId(),
+                    source.getTitle(),
+                    source.getLink(),
+                    content
+            );
 
             return new SourceWithContentDTO(source);
 
@@ -198,7 +214,8 @@ public class SourceService {
         String content;
         try {
             content = fileTextExtractionService.extractTextFromFile(file);
-            if (content == null || content.trim()
+            if (content == null || content
+                    .trim()
                     .isEmpty()) {
                 throw new RuntimeException("No text content could be extracted from the file");
             }
@@ -216,7 +233,13 @@ public class SourceService {
 
         generateAndSetSummary(source);
 
-        asyncVectorIndexingService.indexSourceInVectorStore(notebookId, source, content);
+        asyncVectorIndexingService.indexSourceInVectorStore(
+                notebookId,
+                source.getId(),
+                source.getTitle(),
+                source.getLink(),
+                content
+        );
 
         return new SourceWithContentDTO(source);
     }
@@ -225,7 +248,8 @@ public class SourceService {
         try {
             Prompt prompt = getPrompt(source);
             var response = chatModel.call(prompt);
-            String summary = response.getResult()
+            String summary = response
+                    .getResult()
                     .getOutput()
                     .getText();
 
@@ -253,7 +277,8 @@ public class SourceService {
         }
 
         Source source = sourceOptional.get();
-        if (!source.getNotebook()
+        if (!source
+                .getNotebook()
                 .getId()
                 .equals(notebookId)) {
             throw new SecurityException("Source does not belong to this notebook.");
@@ -270,7 +295,8 @@ public class SourceService {
         }
 
         Source source = sourceOptional.get();
-        if (!source.getNotebook()
+        if (!source
+                .getNotebook()
                 .getId()
                 .equals(notebookId)) {
             throw new SecurityException("Source does not belong to this notebook.");
@@ -288,7 +314,8 @@ public class SourceService {
         }
 
         Source source = sourceOptional.get();
-        if (!source.getNotebook()
+        if (!source
+                .getNotebook()
                 .getId()
                 .equals(notebookId)) {
             throw new SecurityException("Source does not belong to this notebook.");
