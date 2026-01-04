@@ -125,8 +125,6 @@ public class SourceService {
 
             source = sourceRepository.save(source);
 
-            generateAndSetSummary(source);
-
             asyncVectorIndexingService.indexSourceInVectorStore(
                     notebookId,
                     source.getId(),
@@ -203,8 +201,6 @@ public class SourceService {
         assert notebookOptional.isPresent();
         Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get(), content, aiConverter);
         source = sourceRepository.save(source);
-
-        generateAndSetSummary(source);
 
         asyncVectorIndexingService.indexSourceInVectorStore(
                 notebookId,
