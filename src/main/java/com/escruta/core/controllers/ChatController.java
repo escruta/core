@@ -57,7 +57,8 @@ class ChatController {
     ResponseEntity<String> generateSummary(@PathVariable UUID notebookId) {
         try {
             if (sourceService.hasSources(notebookId)) {
-                SummaryResponse summary = ChatClient.create(chatModel)
+                SummaryResponse summary = ChatClient
+                        .create(chatModel)
                         .prompt()
                         .advisors(retrievalService.getQuestionAnswerAdvisor(notebookId))
                         .system(UNIFIED_SUMMARY_SYSTEM_MESSAGE)
@@ -69,12 +70,14 @@ class ChatController {
                 notebookRepository.updateSummary(notebookId, summary.summary());
                 return ResponseEntity.ok(summary.summary());
             } else {
-                return ResponseEntity.badRequest()
+                return ResponseEntity
+                        .badRequest()
                         .body("No sources are available in this notebook to generate a summary.");
             }
         } catch (Exception e) {
             System.out.println("Error during summary generation: " + e.getMessage());
-            return ResponseEntity.internalServerError()
+            return ResponseEntity
+                    .internalServerError()
                     .body("An error occurred while generating the summary. Please try again.");
         }
     }
@@ -95,7 +98,8 @@ class ChatController {
 
             return ResponseEntity.ok(summary);
         } catch (Exception e) {
-            return ResponseEntity.internalServerError()
+            return ResponseEntity
+                    .internalServerError()
                     .body("An error occurred while retrieving the summary. Please try again.");
         }
     }
@@ -104,7 +108,8 @@ class ChatController {
     public ResponseEntity<?> getExampleQuestions(@PathVariable UUID notebookId) {
         try {
             if (sourceService.hasSources(notebookId)) {
-                ExampleQuestions exampleQuestions = ChatClient.create(chatModel)
+                ExampleQuestions exampleQuestions = ChatClient
+                        .create(chatModel)
                         .prompt()
                         .advisors(retrievalService.getQuestionAnswerAdvisor(notebookId))
                         .user("Based on the provided context, generate three simple, short, and concise questions that can be answered using the sources.")
@@ -113,12 +118,15 @@ class ChatController {
 
                 return ResponseEntity.ok(exampleQuestions);
             } else {
-                return ResponseEntity.badRequest()
+                return ResponseEntity
+                        .badRequest()
                         .body("No sources are available in this notebook to generate a summary.");
             }
         } catch (Exception e) {
             System.out.println("Error during example questions generation: " + e.getMessage());
-            return ResponseEntity.internalServerError().body("An error occurred while generating the questions. Please try again.");
+            return ResponseEntity
+                    .internalServerError()
+                    .body("An error occurred while generating the questions. Please try again.");
         }
     }
 
@@ -128,7 +136,8 @@ class ChatController {
             @Valid @RequestBody ChatRequest request
     ) {
         try {
-            ChatMemory chatMemory = MessageWindowChatMemory.builder()
+            ChatMemory chatMemory = MessageWindowChatMemory
+                    .builder()
                     .chatMemoryRepository(chatMemoryRepository)
                     .maxMessages(10)
                     .build();
@@ -142,19 +151,23 @@ class ChatController {
                     request.conversationId() :
                     UUID.randomUUID().toString();
 
-            var chatResponse = chatClient.prompt()
+            var chatResponse = chatClient
+                    .prompt()
                     .advisors(advisorSpec -> advisorSpec.param(ChatMemory.CONVERSATION_ID, conversationId))
                     .user(request.userInput())
                     .call()
                     .chatResponse();
 
             assert chatResponse != null;
-            List<Document> documents = chatResponse.getMetadata()
+            List<Document> documents = chatResponse
+                    .getMetadata()
                     .getOrDefault(QuestionAnswerAdvisor.RETRIEVED_DOCUMENTS, List.of());
 
-            List<ChatReplyMessage.CitedSource> citedSources = documents.stream()
+            List<ChatReplyMessage.CitedSource> citedSources = documents
+                    .stream()
                     .map(doc -> new ChatReplyMessage.CitedSource(
-                            UUID.fromString(doc.getMetadata()
+                            UUID.fromString(doc
+                                    .getMetadata()
                                     .get("sourceId")
                                     .toString()),
                             doc.getMetadata().get("title").toString()
@@ -169,7 +182,8 @@ class ChatController {
             ));
         } catch (Exception e) {
             System.out.println("Error during chat generation: " + e.getMessage());
-            return ResponseEntity.internalServerError()
+            return ResponseEntity
+                    .internalServerError()
                     .body(new ChatReplyMessage(
                             "An error occurred while processing your request. Please try again.",
                             null,

@@ -18,8 +18,7 @@ public record SourceResponseDTO(
     public SourceResponseDTO(Source source) {
         this(
                 source.getId(),
-                source.getNotebook()
-                        .getId(),
+                source.getNotebook().getId(),
                 source.getIcon(),
                 source.getTitle(),
                 source.isConvertedByAi(),

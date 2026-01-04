@@ -7,11 +7,6 @@ public record AccessTokenResponse(
         long expiresIn
 ) {
     public AccessTokenResponse(AccessToken accessToken) {
-        this(
-                accessToken.getToken(),
-                (accessToken
-                        .getExpiresAt()
-                        .toEpochMilli() - System.currentTimeMillis())
-        );
+        this(accessToken.getToken(), (accessToken.getExpiresAt().toEpochMilli() - System.currentTimeMillis()));
     }
 }

@@ -18,8 +18,11 @@ public class NoteMapper {
     }
 
     public void updateNoteFromDto(NoteUpdateDTO dto, Note note) {
-        if (dto.icon() != null) note.setIcon(dto.icon());
-        if (dto.title() != null) note.setTitle(dto.title());
-        if (dto.content() != null) note.setContent(dto.content());
+        if (dto.icon() != null)
+            note.setIcon(dto.icon());
+        if (dto.title() != null)
+            note.setTitle(dto.title());
+        if (dto.content() != null)
+            note.setContent(dto.content());
     }
 }

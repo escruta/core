@@ -28,9 +28,7 @@ public class UserService {
     }
 
     public User getCurrentFullUser() {
-        Authentication authentication = SecurityContextHolder
-                .getContext()
-                .getAuthentication();
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication == null || !authentication.isAuthenticated()) {
             return null;
@@ -38,9 +36,7 @@ public class UserService {
 
         if (authentication.getPrincipal() instanceof OAuth2AuthenticatedPrincipal principal) {
             String email = principal.getAttribute("sub");
-            return userRepository
-                    .findByEmail(email)
-                    .orElse(null);
+            return userRepository.findByEmail(email).orElse(null);
         }
 
         return null;

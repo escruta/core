@@ -20,8 +20,7 @@ public record SourceWithContentDTO(
     public SourceWithContentDTO(Source source) {
         this(
                 source.getId(),
-                source.getNotebook()
-                        .getId(),
+                source.getNotebook().getId(),
                 source.getIcon(),
                 source.getTitle(),
                 source.getContent(),

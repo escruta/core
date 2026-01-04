@@ -35,8 +35,7 @@ public class NoteController {
         var note = noteService.getNote(notebookId, noteId);
         return note != null ?
                 ResponseEntity.ok(note) :
-                ResponseEntity.notFound()
-                        .build();
+                ResponseEntity.notFound().build();
 
     }
 
@@ -46,8 +45,7 @@ public class NoteController {
             @Valid @RequestBody NoteCreationDTO noteCreationDTO
     ) {
         var note = noteService.addNote(notebookId, noteCreationDTO);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(note);
+        return ResponseEntity.status(HttpStatus.CREATED).body(note);
     }
 
     @PutMapping
@@ -58,8 +56,7 @@ public class NoteController {
         var note = noteService.updateNote(notebookId, noteUpdateDTO);
         return note != null ?
                 ResponseEntity.ok(note) :
-                ResponseEntity.notFound()
-                        .build();
+                ResponseEntity.notFound().build();
     }
 
     @DeleteMapping("{noteId}")
@@ -70,7 +67,6 @@ public class NoteController {
         var note = noteService.deleteNote(notebookId, noteId);
         return note != null ?
                 ResponseEntity.ok(note) :
-                ResponseEntity.notFound()
-                        .build();
+                ResponseEntity.notFound().build();
     }
 }

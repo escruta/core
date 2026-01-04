@@ -25,10 +25,7 @@ public class NoteService {
     private final NoteMapper noteMapper;
 
     public List<NoteResponseDTO> getNotes(UUID notebookId) {
-        return noteRepository.findByNotebookId(notebookId)
-                .stream()
-                .map(NoteResponseDTO::new)
-                .toList();
+        return noteRepository.findByNotebookId(notebookId).stream().map(NoteResponseDTO::new).toList();
     }
 
     public NoteWithContentDTO getNote(UUID notebookId, UUID noteId) {
@@ -36,8 +33,7 @@ public class NoteService {
         if (note.isEmpty() || !notebookRepository.existsById(notebookId)) {
             return null;
         }
-        return note.map(NoteWithContentDTO::new)
-                .orElse(null);
+        return note.map(NoteWithContentDTO::new).orElse(null);
     }
 
     public NoteResponseDTO addNote(UUID notebookId, NoteCreationDTO newNoteDto) {
@@ -67,8 +63,7 @@ public class NoteService {
         Optional<Notebook> notebookOptional = notebookRepository.findById(notebookId);
         Optional<Note> noteOptional = noteRepository.findById(noteId);
         if (notebookOptional.isPresent() && noteOptional.isPresent()) {
-            noteRepository.deleteById(noteOptional.get()
-                    .getId());
+            noteRepository.deleteById(noteOptional.get().getId());
             return new NoteResponseDTO(noteOptional.get());
         }
         return null;

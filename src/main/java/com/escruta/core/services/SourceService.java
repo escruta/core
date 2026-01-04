@@ -44,27 +44,17 @@ public class SourceService {
 
     private WebContent fetchWebContent(String url) {
         try {
-            var doc = Jsoup
-                    .connect(url)
-                    .get();
+            var doc = Jsoup.connect(url).get();
             String title = doc.title();
 
-            if (title
-                    .trim()
-                    .isEmpty()) {
-                title = doc
-                        .select("meta[property=og:title]")
-                        .attr("content");
+            if (title.trim().isEmpty()) {
+                title = doc.select("meta[property=og:title]").attr("content");
             }
-            if (title
-                    .trim()
-                    .isEmpty()) {
+            if (title.trim().isEmpty()) {
                 title = generateDefaultTitle(url);
             }
 
-            String textContent = doc
-                    .body()
-                    .text();
+            String textContent = doc.body().text();
             return new WebContent(title.trim(), textContent);
         } catch (IOException e) {
             throw new RuntimeException("Failed to fetch content from URL: " + url, e);
@@ -82,15 +72,9 @@ public class SourceService {
         try {
             UserMessage userMessage = new UserMessage(rawContent);
             Prompt prompt = new Prompt(List.of(new SystemMessage(systemPrompt), userMessage));
-            return chatModel
-                    .call(prompt)
-                    .getResult()
-                    .getOutput()
-                    .getText();
+            return chatModel.call(prompt).getResult().getOutput().getText();
         } catch (Exception e) {
-            return rawContent
-                    .replaceAll("(?m)^[ \t]*\r?\n", "")
-                    .trim();
+            return rawContent.replaceAll("(?m)^[ \t]*\r?\n", "").trim();
         }
     }
 
@@ -108,11 +92,7 @@ public class SourceService {
     }
 
     public List<SourceResponseDTO> getSources(UUID notebookId) {
-        return sourceRepository
-                .findByNotebookId(notebookId)
-                .stream()
-                .map(SourceResponseDTO::new)
-                .toList();
+        return sourceRepository.findByNotebookId(notebookId).stream().map(SourceResponseDTO::new).toList();
     }
 
     public SourceWithContentDTO getSource(UUID notebookId, UUID sourceId) {
@@ -120,9 +100,7 @@ public class SourceService {
         if (source.isEmpty() || !notebookRepository.existsById(notebookId)) {
             return null;
         }
-        return source
-                .map(SourceWithContentDTO::new)
-                .orElse(null);
+        return source.map(SourceWithContentDTO::new).orElse(null);
     }
 
     @Transactional
@@ -141,10 +119,7 @@ public class SourceService {
 
             assert notebookOptional.isPresent();
             Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get(), content, aiConverter);
-            if (source.getTitle() == null || source
-                    .getTitle()
-                    .trim()
-                    .isEmpty()) {
+            if (source.getTitle() == null || source.getTitle().trim().isEmpty()) {
                 source.setTitle(webContent.title());
             }
 
@@ -214,9 +189,7 @@ public class SourceService {
         String content;
         try {
             content = fileTextExtractionService.extractTextFromFile(file);
-            if (content == null || content
-                    .trim()
-                    .isEmpty()) {
+            if (content == null || content.trim().isEmpty()) {
                 throw new RuntimeException("No text content could be extracted from the file");
             }
 
@@ -248,10 +221,7 @@ public class SourceService {
         try {
             Prompt prompt = getPrompt(source);
             var response = chatModel.call(prompt);
-            String summary = response
-                    .getResult()
-                    .getOutput()
-                    .getText();
+            String summary = response.getResult().getOutput().getText();
 
             source.setSummary(summary);
             sourceRepository.save(source);
@@ -277,10 +247,7 @@ public class SourceService {
         }
 
         Source source = sourceOptional.get();
-        if (!source
-                .getNotebook()
-                .getId()
-                .equals(notebookId)) {
+        if (!source.getNotebook().getId().equals(notebookId)) {
             throw new SecurityException("Source does not belong to this notebook.");
         }
 
@@ -295,10 +262,7 @@ public class SourceService {
         }
 
         Source source = sourceOptional.get();
-        if (!source
-                .getNotebook()
-                .getId()
-                .equals(notebookId)) {
+        if (!source.getNotebook().getId().equals(notebookId)) {
             throw new SecurityException("Source does not belong to this notebook.");
         }
 
@@ -314,10 +278,7 @@ public class SourceService {
         }
 
         Source source = sourceOptional.get();
-        if (!source
-                .getNotebook()
-                .getId()
-                .equals(notebookId)) {
+        if (!source.getNotebook().getId().equals(notebookId)) {
             throw new SecurityException("Source does not belong to this notebook.");
         }
 

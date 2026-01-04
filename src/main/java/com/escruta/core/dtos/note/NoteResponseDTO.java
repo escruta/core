@@ -18,7 +18,9 @@ public record NoteResponseDTO(
         this(
                 note.getId(),
                 note.getNotebook().getId(),
-                note.getSource() != null ? note.getSource().getId() : null,
+                note.getSource() != null ?
+                        note.getSource().getId() :
+                        null,
                 note.getIcon(),
                 note.getTitle(),
                 note.getCreatedAt(),

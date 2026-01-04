@@ -25,37 +25,27 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<String> handleAccessDenied(AccessDeniedException ex) {
-        return ResponseEntity
-                .status(HttpStatus.UNAUTHORIZED)
-                .body(ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<String> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
-        if (ex
-                .getName()
-                .equals("notebookId") && ex.getRequiredType() != null && ex
+        if (ex.getName().equals("notebookId") && ex.getRequiredType() != null && ex
                 .getRequiredType()
                 .equals(UUID.class)) {
             String errorMessage = "Invalid format for notebookId. It must be a valid UUID.";
-            return ResponseEntity
-                    .badRequest()
-                    .body(errorMessage);
+            return ResponseEntity.badRequest().body(errorMessage);
         }
 
         assert ex.getRequiredType() != null;
         var parameterName = ex.getName();
-        var parameterType = ex
-                .getRequiredType()
-                .getSimpleName();
+        var parameterType = ex.getRequiredType().getSimpleName();
         String defaultError = String.format(
                 "Parameter '%s' is not of the required type '%s'.",
                 parameterName,
                 parameterType
         );
-        return ResponseEntity
-                .badRequest()
-                .body(defaultError);
+        return ResponseEntity.badRequest().body(defaultError);
     }
 
     @ExceptionHandler(Exception.class)

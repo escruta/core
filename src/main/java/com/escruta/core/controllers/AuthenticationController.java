@@ -47,13 +47,9 @@ public class AuthenticationController {
                     .status(HttpStatus.CREATED)
                     .body(new AccessTokenResponse(tokenService.createToken(authentication.getName())));
         } catch (DataIntegrityViolationException e) {
-            return ResponseEntity
-                    .status(HttpStatus.CONFLICT)
-                    .build();
+            return ResponseEntity.status(HttpStatus.CONFLICT).build();
         } catch (Exception e) {
-            return ResponseEntity
-                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
@@ -61,15 +57,12 @@ public class AuthenticationController {
     public ResponseEntity<?> introspect(@RequestParam("token") String token) {
         return tokenService
                 .validateToken(token)
-                .map(t -> ResponseEntity.ok(Map.of(
-                        "active",
+                .map(t -> ResponseEntity.ok(Map.of("active",
                         true,
                         "sub",
                         t.getEmail(),
                         "exp",
-                        t
-                                .getExpiresAt()
-                                .getEpochSecond()
+                        t.getExpiresAt().getEpochSecond()
                 )))
                 .orElse(ResponseEntity.ok(Map.of("active", false)));
     }

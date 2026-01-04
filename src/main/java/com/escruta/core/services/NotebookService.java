@@ -26,10 +26,7 @@ public class NotebookService {
     private final NoteService noteService;
 
     public List<NotebookResponseDTO> getAllUserNotebooks() {
-        return notebookRepository.findByUserId(userService.getUserId())
-                .stream()
-                .map(NotebookResponseDTO::new)
-                .toList();
+        return notebookRepository.findByUserId(userService.getUserId()).stream().map(NotebookResponseDTO::new).toList();
     }
 
     public Optional<NotebookWithDetailsDTO> getUserNotebookWithDetails(UUID id) {

@@ -30,20 +30,14 @@ public class TokenService {
         AccessToken accessToken = new AccessToken();
         accessToken.setToken(base64Encoder.encodeToString(randomBytes));
         accessToken.setEmail(email);
-        accessToken.setExpiresAt(Instant
-                .now()
-                .plusSeconds(this.sessionExpirationIntervalSeconds));
+        accessToken.setExpiresAt(Instant.now().plusSeconds(this.sessionExpirationIntervalSeconds));
 
         accessTokenRepository.save(accessToken);
         return accessToken;
     }
 
     public Optional<AccessToken> validateToken(String token) {
-        return accessTokenRepository
-                .findByToken(token)
-                .filter(t -> t
-                        .getExpiresAt()
-                        .isAfter(Instant.now()));
+        return accessTokenRepository.findByToken(token).filter(t -> t.getExpiresAt().isAfter(Instant.now()));
     }
 
     @Transactional

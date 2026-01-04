@@ -17,7 +17,9 @@ public class NotebookMapper {
     }
 
     public void updateNotebookFromDto(NotebookUpdateDTO dto, Notebook notebook) {
-        if (dto.icon() != null) notebook.setIcon(dto.icon());
-        if (dto.title() != null) notebook.setTitle(dto.title());
+        if (dto.icon() != null)
+            notebook.setIcon(dto.icon());
+        if (dto.title() != null)
+            notebook.setTitle(dto.title());
     }
 }

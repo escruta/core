@@ -56,9 +56,7 @@ public class RetrievalService {
                     chunk.getText() :
                     "";
             Document document = new Document(
-                    UUID
-                            .randomUUID()
-                            .toString(), text, Map.of(
+                    UUID.randomUUID().toString(), text, Map.of(
                     "sourceId",
                     sourceId.toString(),
                     "notebookId",

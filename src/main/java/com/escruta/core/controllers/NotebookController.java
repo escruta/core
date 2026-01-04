@@ -29,12 +29,13 @@ public class NotebookController {
     @GetMapping("{notebookId}")
     public ResponseEntity<NotebookWithDetailsDTO> getUserNotebook(@PathVariable UUID notebookId) {
         var notebook = notebookService.getUserNotebookWithDetails(notebookId);
-        return notebook.map(ResponseEntity::ok)
-                .orElseGet(() -> new ResponseEntity<>(HttpStatus.NOT_FOUND));
+        return notebook.map(ResponseEntity::ok).orElseGet(() -> new ResponseEntity<>(HttpStatus.NOT_FOUND));
     }
 
     @PostMapping
-    public ResponseEntity<NotebookResponseDTO> createNotebook(@Valid @RequestBody NotebookCreationDTO createNotebookDto) {
+    public ResponseEntity<NotebookResponseDTO> createNotebook(
+            @Valid @RequestBody NotebookCreationDTO createNotebookDto
+    ) {
         var notebook = notebookService.createNotebook(createNotebookDto);
         return new ResponseEntity<>(notebook, HttpStatus.CREATED);
     }

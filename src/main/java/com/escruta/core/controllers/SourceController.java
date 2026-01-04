@@ -37,8 +37,7 @@ public class SourceController {
         var source = sourceService.getSource(notebookId, sourceId);
         return source != null ?
                 ResponseEntity.ok(source) :
-                ResponseEntity.notFound()
-                        .build();
+                ResponseEntity.notFound().build();
     }
 
     @PostMapping
@@ -50,13 +49,10 @@ public class SourceController {
         try {
             var source = sourceService.addSource(notebookId, sourceCreationDTO, aiConverter);
             return source != null ?
-                    ResponseEntity.status(HttpStatus.CREATED)
-                            .body(source) :
-                    ResponseEntity.badRequest()
-                            .build();
+                    ResponseEntity.status(HttpStatus.CREATED).body(source) :
+                    ResponseEntity.badRequest().build();
         } catch (Exception e) {
-            return ResponseEntity.internalServerError()
-                    .build();
+            return ResponseEntity.internalServerError().build();
         }
     }
 
@@ -70,31 +66,23 @@ public class SourceController {
     ) {
         try {
             if (file.isEmpty()) {
-                return ResponseEntity.badRequest()
-                        .build();
+                return ResponseEntity.badRequest().build();
             }
-            if (title == null || title.trim()
-                    .isEmpty()) {
-                return ResponseEntity.badRequest()
-                        .build();
+            if (title == null || title.trim().isEmpty()) {
+                return ResponseEntity.badRequest().build();
             }
             var sourceFileCreationDTO = new SourceFileCreationDTO(icon, title.trim());
 
             var source = sourceService.addSourceFromFile(notebookId, sourceFileCreationDTO, file, aiConverter);
             return source != null ?
-                    ResponseEntity.status(HttpStatus.CREATED)
-                            .body(source) :
-                    ResponseEntity.badRequest()
-                            .build();
+                    ResponseEntity.status(HttpStatus.CREATED).body(source) :
+                    ResponseEntity.badRequest().build();
         } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .build();
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest()
-                    .body(e.getMessage());
+            return ResponseEntity.badRequest().body(e.getMessage());
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
@@ -106,8 +94,7 @@ public class SourceController {
         var source = sourceService.updateSource(notebookId, sourceUpdateDTO);
         return source != null ?
                 ResponseEntity.ok(source) :
-                ResponseEntity.notFound()
-                        .build();
+                ResponseEntity.notFound().build();
     }
 
     @DeleteMapping("{sourceId}")
@@ -119,11 +106,9 @@ public class SourceController {
             var source = sourceService.deleteSource(notebookId, sourceId);
             return source != null ?
                     ResponseEntity.ok(source) :
-                    ResponseEntity.notFound()
-                            .build();
+                    ResponseEntity.notFound().build();
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
@@ -133,14 +118,11 @@ public class SourceController {
             String summary = sourceService.generateSummary(notebookId, sourceId);
             return summary != null ?
                     ResponseEntity.ok(summary) :
-                    ResponseEntity.notFound()
-                            .build();
+                    ResponseEntity.notFound().build();
         } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .build();
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
@@ -150,11 +132,9 @@ public class SourceController {
             String summary = sourceService.getSummary(notebookId, sourceId);
             return ResponseEntity.ok(summary);
         } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .build();
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
@@ -163,16 +143,12 @@ public class SourceController {
         try {
             boolean deleted = sourceService.deleteSummary(notebookId, sourceId);
             return deleted ?
-                    ResponseEntity.noContent()
-                            .build() :
-                    ResponseEntity.notFound()
-                            .build();
+                    ResponseEntity.noContent().build() :
+                    ResponseEntity.notFound().build();
         } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .build();
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 }
