@@ -37,14 +37,14 @@ class ChatController {
             """;
 
     private static final String UNIFIED_SUMMARY_SYSTEM_MESSAGE = """
-            You are a helpful AI assistant that creates simple summaries.
+            Write a summary paragraph of 4-5 lines about the content provided.
             
             RULES:
-            1. Keep summaries SHORT and SIMPLE
-            2. Use plain, easy-to-understand language
-            3. Focus on the most important information only
-            4. Write 2-3 clear sentences maximum
-            5. NO citations, references, or complex formatting
+            - Use **bold** for key terms and *italic* for emphasis (sparingly)
+            - Write as if explaining the topic directly, not describing the sources
+            - Do NOT start with "The articles...", "The sources...", "This content..." or similar
+            - Start directly with the subject matter (e.g., "Quantum computing is...")
+            - Define or mention the main concepts
             """;
 
     private final SourceService sourceService;
@@ -53,29 +53,49 @@ class ChatController {
     private final NotebookRepository notebookRepository;
     private final JdbcChatMemoryRepository chatMemoryRepository;
 
+    private Optional<String> getNotebookContext(UUID notebookId, int documentLimit) {
+        if (!sourceService.hasSources(notebookId)) {
+            return Optional.empty();
+        }
+
+        var documents = retrievalService.getDocumentsForNotebook(notebookId, documentLimit);
+        if (documents.isEmpty()) {
+            return Optional.empty();
+        }
+
+        String context = documents
+                .stream()
+                .map(Document::getText)
+                .filter(text -> text != null && !text.isBlank())
+                .reduce((a, b) -> a + "\n\n" + b)
+                .orElse("");
+
+        return context.isBlank() ?
+                Optional.empty() :
+                Optional.of(context);
+    }
+
     @PostMapping("summary")
     ResponseEntity<String> generateSummary(@PathVariable UUID notebookId) {
         try {
-            if (sourceService.hasSources(notebookId)) {
-                SummaryResponse summary = ChatClient
-                        .create(chatModel)
-                        .prompt()
-                        .advisors(retrievalService.getQuestionAnswerAdvisor(notebookId))
-                        .system(UNIFIED_SUMMARY_SYSTEM_MESSAGE)
-                        .user("I want you to summarize the key information in 2 or 3 sentences, and I want that summary to be clear, complete, and free of citations or references.")
-                        .call()
-                        .entity(SummaryResponse.class);
+            Optional<String> context = getNotebookContext(notebookId, 5);
 
-                assert summary != null;
-                notebookRepository.updateSummary(notebookId, summary.summary());
-                return ResponseEntity.ok(summary.summary());
-            } else {
-                return ResponseEntity
-                        .badRequest()
-                        .body("No sources are available in this notebook to generate a summary.");
+            if (context.isEmpty()) {
+                return ResponseEntity.badRequest().body("No sources available or content not yet indexed.");
             }
+
+            SummaryResponse summary = ChatClient
+                    .create(chatModel)
+                    .prompt()
+                    .system(UNIFIED_SUMMARY_SYSTEM_MESSAGE)
+                    .user("Write a summary paragraph about this:\n\n" + context.get())
+                    .call()
+                    .entity(SummaryResponse.class);
+
+            assert summary != null;
+            notebookRepository.updateSummary(notebookId, summary.summary());
+            return ResponseEntity.ok(summary.summary());
         } catch (Exception e) {
-            System.out.println("Error during summary generation: " + e.getMessage());
             return ResponseEntity
                     .internalServerError()
                     .body("An error occurred while generating the summary. Please try again.");
@@ -107,23 +127,36 @@ class ChatController {
     @GetMapping("example-questions")
     public ResponseEntity<?> getExampleQuestions(@PathVariable UUID notebookId) {
         try {
-            if (sourceService.hasSources(notebookId)) {
-                ExampleQuestions exampleQuestions = ChatClient
-                        .create(chatModel)
-                        .prompt()
-                        .advisors(retrievalService.getQuestionAnswerAdvisor(notebookId))
-                        .user("Based on the provided context, generate three simple, short, and concise questions that can be answered using the sources.")
-                        .call()
-                        .entity(ExampleQuestions.class);
+            Optional<String> context = getNotebookContext(notebookId, 3);
 
-                return ResponseEntity.ok(exampleQuestions);
-            } else {
-                return ResponseEntity
-                        .badRequest()
-                        .body("No sources are available in this notebook to generate a summary.");
+            if (context.isEmpty()) {
+                return ResponseEntity.badRequest().body("No sources available or content not yet indexed.");
             }
+
+            ExampleQuestions exampleQuestions = ChatClient.create(chatModel).prompt().user("""
+                    Generate exactly 3 questions based on this text.
+                    
+                    RULES:
+                    - Questions must be about the SUBJECT MATTER, not about the text itself
+                    - Do NOT mention "article", "document", "text", "source", or "Wikipedia"
+                    - Do NOT ask what the topic is or what is covered
+                    - Ask questions that someone studying this subject would ask
+                    
+                    %s
+                    """.formatted(context.get())).call().entity(ExampleQuestions.class);
+
+            if (exampleQuestions != null && exampleQuestions.questions() != null) {
+                List<String> limitedQuestions = exampleQuestions
+                        .questions()
+                        .stream()
+                        .filter(q -> q != null && !q.isBlank())
+                        .limit(3)
+                        .toList();
+                return ResponseEntity.ok(new ExampleQuestions(limitedQuestions));
+            }
+
+            return ResponseEntity.ok(new ExampleQuestions(List.of()));
         } catch (Exception e) {
-            System.out.println("Error during example questions generation: " + e.getMessage());
             return ResponseEntity
                     .internalServerError()
                     .body("An error occurred while generating the questions. Please try again.");
@@ -181,7 +214,6 @@ class ChatController {
                     citedSources
             ));
         } catch (Exception e) {
-            System.out.println("Error during chat generation: " + e.getMessage());
             return ResponseEntity
                     .internalServerError()
                     .body(new ChatReplyMessage(

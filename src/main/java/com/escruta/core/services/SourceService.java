@@ -10,6 +10,7 @@ import com.escruta.core.entities.Source;
 import com.escruta.core.mappers.SourceMapper;
 import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.repositories.SourceRepository;
+import io.github.furstenheim.CopyDown;
 import org.jsoup.Jsoup;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -38,7 +39,8 @@ public class SourceService {
 
     private record WebContent(
             String title,
-            String content
+            String content,
+            String html
     ) {
     }
 
@@ -54,27 +56,55 @@ public class SourceService {
                 title = generateDefaultTitle(url);
             }
 
-            String textContent = doc.body().text();
-            return new WebContent(title.trim(), textContent);
+            var mainElement = extractMainElement(doc);
+            String textContent = mainElement.text();
+            String htmlContent = mainElement.html();
+
+            return new WebContent(title.trim(), textContent, htmlContent);
         } catch (IOException e) {
             throw new RuntimeException("Failed to fetch content from URL: " + url, e);
         }
     }
 
-    private String formatContentAsMarkdown(String rawContent) {
+    private org.jsoup.nodes.Element extractMainElement(org.jsoup.nodes.Document doc) {
+        doc
+                .select("nav, header, footer, aside, .sidebar, .menu, .navigation, " + ".advertisement, .ads, .ad, script, style, noscript, " + ".footer, .header, .nav, #nav, #header, #footer, #sidebar, " + ".social, .share, .comments, .related, .recommended")
+                .remove();
+
+        String[] mainSelectors = {"article", "main", "[role=main]", ".post-content", ".article-content", ".entry-content", ".content", "#content", "#mw-content-text", ".mw-parser-output"};
+
+        for (String selector : mainSelectors) {
+            var element = doc.selectFirst(selector);
+            if (element != null && element.text().length() > 200) {
+                return element;
+            }
+        }
+
+        return doc.body();
+    }
+
+    private String convertHtmlToMarkdown(String htmlContent) {
+        CopyDown converter = new CopyDown();
+        return converter.convert(htmlContent);
+    }
+
+    private String cleanContentWithAI(String content) {
         String systemPrompt = """
-                You are an expert content processor. Your task is to convert the provided raw text from a webpage into a clean, well-structured Markdown format.
-                - Focus exclusively on the main article or primary content.
-                - Omit all headers, footers, navigation menus, sidebars, advertisements, and other boilerplate text.
-                - The output must be only the formatted Markdown content, without any introductory phrases like "Here is the markdown content:".
+                Clean and improve this Markdown content.
+                
+                RULES:
+                - Remove any leftover navigation, menus, or boilerplate text
+                - Keep all the important information intact
+                - Fix formatting issues
+                - Output ONLY the cleaned Markdown, nothing else
                 """;
 
         try {
-            UserMessage userMessage = new UserMessage(rawContent);
+            UserMessage userMessage = new UserMessage(content);
             Prompt prompt = new Prompt(List.of(new SystemMessage(systemPrompt), userMessage));
             return chatModel.call(prompt).getResult().getOutput().getText();
         } catch (Exception e) {
-            return rawContent.replaceAll("(?m)^[ \t]*\r?\n", "").trim();
+            return content;
         }
     }
 
@@ -109,12 +139,10 @@ public class SourceService {
 
         try {
             WebContent webContent = fetchWebContent(newSourceDto.link());
-            String content;
+            String content = convertHtmlToMarkdown(webContent.html());
 
             if (aiConverter) {
-                content = formatContentAsMarkdown(webContent.content());
-            } else {
-                content = webContent.content();
+                content = cleanContentWithAI(content);
             }
 
             assert notebookOptional.isPresent();
@@ -192,7 +220,7 @@ public class SourceService {
             }
 
             if (aiConverter) {
-                content = formatContentAsMarkdown(content);
+                content = cleanContentWithAI(content);
             }
         } catch (Exception e) {
             throw new RuntimeException("Error processing file: " + e.getMessage(), e);

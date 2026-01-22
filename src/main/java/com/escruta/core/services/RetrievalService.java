@@ -22,7 +22,8 @@ public class RetrievalService {
                 .builder(vectorStore)
                 .searchRequest(SearchRequest
                         .builder()
-                        .topK(3)
+                        .topK(5)
+                        .similarityThreshold(0.0)
                         .filterExpression(new Filter.Expression(
                                 Filter.ExpressionType.EQ,
                                 new Filter.Key("notebookId"),
@@ -40,6 +41,34 @@ public class RetrievalService {
                     new Filter.Value(sourceId.toString())
             ));
         } catch (Exception ignored) {
+        }
+    }
+
+    public List<Document> getDocumentsForNotebook(UUID notebookId, int limit) {
+        try {
+            SearchRequest searchRequest = SearchRequest
+                    .builder()
+                    .query("key concepts definitions explanations important information details")
+                    .topK(limit)
+                    .similarityThreshold(0.0)
+                    .filterExpression(new Filter.Expression(
+                            Filter.ExpressionType.EQ,
+                            new Filter.Key("notebookId"),
+                            new Filter.Value(notebookId.toString())
+                    ))
+                    .build();
+            List<Document> results = vectorStore.similaritySearch(searchRequest);
+
+            List<Document> substantiveResults = results
+                    .stream()
+                    .filter(doc -> doc.getText() != null && doc.getText().length() > 100)
+                    .toList();
+
+            return substantiveResults.isEmpty() ?
+                    results :
+                    substantiveResults;
+        } catch (Exception e) {
+            return List.of();
         }
     }
 
