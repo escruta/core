@@ -141,6 +141,7 @@ class ChatController {
                     - Do NOT mention "article", "document", "text", "source", or "Wikipedia"
                     - Do NOT ask what the topic is or what is covered
                     - Ask questions that someone studying this subject would ask
+                    - Each question must be answerable using ONLY the provided information
                     
                     %s
                     """.formatted(context.get())).call().entity(ExampleQuestions.class);
