@@ -45,15 +45,19 @@ The backend service will be available at [localhost:8080](http://localhost:8080)
 The application can be configured using environment variables. These can be set in your shell or passed to the
 application at runtime.
 
-| Variable                          | Description                         | Default                                                                |
-|-----------------------------------|-------------------------------------|------------------------------------------------------------------------|
-| `ESCRUTA_PORT`                    | Backend port                        | `8080`                                                                 |
-| `ESCRUTA_DATABASE_URL`            | JDBC URL for the database           | `jdbc:postgresql://localhost:5432/escruta?user=postgres&password=1234` |
-| `ESCRUTA_AI_BASE_URL`             | Base URL for the AI provider        | (Required)                                                             |
-| `ESCRUTA_AI_API_KEY`              | API Key for the AI provider         | (Required)                                                             |
-| `ESCRUTA_AI_MODEL`                | AI model to use for chat            | (Required)                                                             |
-| `ESCRUTA_AI_EMBEDDING_MODEL`      | AI model to use for embeddings      | (Required)                                                             |
-| `ESCRUTA_AI_EMBEDDING_DIMENSIONS` | Dimensions of the embedding vectors | `768`                                                                  |
-| `ESCRUTA_CORS_ALLOWED_ORIGINS`    | Allowed origins for CORS            | `http://localhost:5173`                                                |
+| Variable                           | Description                          | Default                                                                |
+|------------------------------------|--------------------------------------|------------------------------------------------------------------------|
+| `ESCRUTA_PORT`                     | Backend port                         | `8080`                                                                 |
+| `ESCRUTA_DATABASE_URL`             | JDBC URL for the database            | `jdbc:postgresql://localhost:5432/escruta?user=postgres&password=1234` |
+| `ESCRUTA_AI_BASE_URL`              | Base URL for the AI provider         | (Required)                                                             |
+| `ESCRUTA_AI_API_KEY`               | API Key for the AI provider          | (Required)                                                             |
+| `ESCRUTA_AI_MODEL`                 | AI model to use for chat             | (Required)                                                             |
+| `ESCRUTA_AI_CHAT_COMPLETIONS_PATH` | Path for chat completions endpoint   | `/v1/chat/completions`                                                 |
+| `ESCRUTA_AI_EMBEDDING_MODEL`       | AI model to use for embeddings       | (Required)                                                             |
+| `ESCRUTA_AI_EMBEDDING_DIMENSIONS`  | Dimensions of the embedding vectors  | `768`                                                                  |
+| `ESCRUTA_AI_EMBEDDING_PATH`        | Path for embeddings endpoint         | `/v1/embeddings`                                                       |
+| `ESCRUTA_AI_EMBEDDING_BASE_URL`    | Base URL for embeddings (if differs) | `ESCRUTA_AI_BASE_URL`                                                  |
+| `ESCRUTA_AI_EMBEDDING_API_KEY`     | API Key for embeddings (if differs)  | `ESCRUTA_AI_API_KEY`                                                   |
+| `ESCRUTA_CORS_ALLOWED_ORIGINS`     | Allowed origins for CORS             | `http://localhost:5173`                                                |
 
 See [application.yml](./src/main/resources/application.yml) for the full list of configuration options.
