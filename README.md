@@ -26,6 +26,13 @@ handles the business logic, document processing, AI orchestration, and persisten
 - PostgreSQL (version 15 or higher) with `pgvector` extension.
 - An OpenAI-compatible API.
 
+> [!TIP]
+> You can use the official [`pgvector/pgvector`](https://hub.docker.com/r/pgvector/pgvector) Docker image, which
+> includes PostgreSQL with `pgvector` pre-installed:
+> ```bash
+> docker run -d --name escruta-db -p 5432:5432 -e POSTGRES_PASSWORD=1234 -e POSTGRES_DB=escruta pgvector/pgvector:pg16
+> ```
+
 ### Installation
 
 - `./gradlew bootRun` - Start the development server
