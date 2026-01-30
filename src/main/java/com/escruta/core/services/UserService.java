@@ -3,6 +3,7 @@ package com.escruta.core.services;
 import com.escruta.core.dtos.ChangePasswordDto;
 import com.escruta.core.dtos.RegisterUserDto;
 import com.escruta.core.entities.User;
+import com.escruta.core.exceptions.DuplicateFieldException;
 import com.escruta.core.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -43,6 +44,10 @@ public class UserService {
     }
 
     public User register(RegisterUserDto input) {
+        if (userRepository.existsByEmail(input.getEmail())) {
+            throw new DuplicateFieldException("email", input.getEmail());
+        }
+
         var user = new User();
         user.setFullName(input.getFullName());
         user.setEmail(input.getEmail());

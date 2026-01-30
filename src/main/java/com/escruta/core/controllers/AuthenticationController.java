@@ -7,7 +7,6 @@ import com.escruta.core.services.TokenService;
 import com.escruta.core.services.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -40,17 +39,11 @@ public class AuthenticationController {
 
     @PostMapping("/register")
     public ResponseEntity<AccessTokenResponse> register(@Valid @RequestBody RegisterUserDto registerUserDto) {
-        try {
-            var registeredUser = userService.register(registerUserDto);
-            var authentication = this.authenticate(registeredUser.getEmail(), registerUserDto.getPassword());
-            return ResponseEntity
-                    .status(HttpStatus.CREATED)
-                    .body(new AccessTokenResponse(tokenService.createToken(authentication.getName())));
-        } catch (DataIntegrityViolationException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).build();
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        var registeredUser = userService.register(registerUserDto);
+        var authentication = this.authenticate(registeredUser.getEmail(), registerUserDto.getPassword());
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(new AccessTokenResponse(tokenService.createToken(authentication.getName())));
     }
 
     @PostMapping("/introspect")
