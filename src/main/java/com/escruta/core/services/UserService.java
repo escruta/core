@@ -4,8 +4,10 @@ import com.escruta.core.dtos.ChangePasswordDto;
 import com.escruta.core.dtos.RegisterUserDto;
 import com.escruta.core.entities.User;
 import com.escruta.core.exceptions.DuplicateFieldException;
+import com.escruta.core.repositories.AccessTokenRepository;
 import com.escruta.core.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -19,6 +21,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserService {
     private final UserRepository userRepository;
+    private final AccessTokenRepository accessTokenRepository;
     private final PasswordEncoder passwordEncoder;
 
     public UUID getUserId() {
@@ -74,5 +77,15 @@ public class UserService {
         }
         currentUser.setPassword(passwordEncoder.encode(changePasswordDto.getNewPassword()));
         userRepository.save(currentUser);
+    }
+
+    @Transactional
+    public void deleteAccount() {
+        User currentUser = getCurrentFullUser();
+        if (currentUser == null) {
+            throw new BadCredentialsException("User not authenticated");
+        }
+        accessTokenRepository.deleteByEmail(currentUser.getEmail());
+        userRepository.delete(currentUser);
     }
 }

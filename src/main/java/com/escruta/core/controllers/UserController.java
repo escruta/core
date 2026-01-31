@@ -6,7 +6,6 @@ import com.escruta.core.services.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.*;
 
 @RequestMapping("/users")
@@ -22,25 +21,19 @@ public class UserController {
 
     @PostMapping("/change-name")
     public ResponseEntity<?> changeName(@RequestParam String newFullName) {
-        try {
-            userService.changeName(newFullName);
-            return ResponseEntity.ok().build();
-        } catch (BadCredentialsException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
-        }
+        userService.changeName(newFullName);
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/change-password")
     public ResponseEntity<?> changePassword(@Valid @RequestBody ChangePasswordDto changePasswordDto) {
-        try {
-            userService.changePassword(changePasswordDto);
-            return ResponseEntity.ok().build();
-        } catch (BadCredentialsException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
-        }
+        userService.changePassword(changePasswordDto);
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/me")
+    public ResponseEntity<?> deleteAccount() {
+        userService.deleteAccount();
+        return ResponseEntity.noContent().build();
     }
 }
