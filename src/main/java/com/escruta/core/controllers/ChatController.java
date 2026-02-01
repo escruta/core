@@ -124,13 +124,29 @@ class ChatController {
         }
     }
 
+    @DeleteMapping("summary")
+    ResponseEntity<Void> deleteSummary(@PathVariable UUID notebookId) {
+        try {
+            var notebook = notebookRepository.findById(notebookId).orElse(null);
+
+            if (notebook == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            notebookRepository.updateSummary(notebookId, null);
+            return ResponseEntity.noContent().build();
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
     @GetMapping("example-questions")
     public ResponseEntity<?> getExampleQuestions(@PathVariable UUID notebookId) {
         try {
             Optional<String> context = getNotebookContext(notebookId, 3);
 
             if (context.isEmpty()) {
-                return ResponseEntity.badRequest().body("No sources available or content not yet indexed.");
+                return ResponseEntity.ok(List.of());
             }
 
             ExampleQuestions exampleQuestions = ChatClient.create(chatModel).prompt().user("""
