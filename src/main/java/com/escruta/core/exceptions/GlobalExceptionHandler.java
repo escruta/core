@@ -1,7 +1,11 @@
 package com.escruta.core.exceptions;
 
+import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.retry.NonTransientAiException;
+import org.springframework.ai.retry.TransientAiException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -26,71 +30,72 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BadCredentialsException.class)
     public ProblemDetail handleBadCredentials() {
-        ProblemDetail errorDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatusCode.valueOf(401),
-                "Authentication failed"
-        );
-        errorDetail.setProperty("message", "The email or password is incorrect");
-        return errorDetail;
+        return createProblem(HttpStatus.UNAUTHORIZED, "Authentication failed", "The email or password is incorrect");
     }
 
-    @ExceptionHandler(AccessDeniedException.class)
-    public ProblemDetail handleAccessDenied() {
-        ProblemDetail errorDetail = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(403), "Access denied");
-        errorDetail.setProperty("message", "You are not authorized to access this resource");
-        return errorDetail;
+    @ExceptionHandler({AccessDeniedException.class, SecurityException.class})
+    public ProblemDetail handleForbidden(Exception ex) {
+        return createProblem(HttpStatus.FORBIDDEN, "Access denied", ex.getMessage());
     }
 
     @ExceptionHandler(AccountStatusException.class)
     public ProblemDetail handleAccountStatus(AccountStatusException ex) {
-        ProblemDetail errorDetail = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(403), ex.getMessage());
-        errorDetail.setProperty("message", "The account is locked");
-        return errorDetail;
+        return createProblem(HttpStatus.FORBIDDEN, ex.getMessage(), "The account is locked");
     }
 
-    @ExceptionHandler(NoResourceFoundException.class)
-    public ProblemDetail handleNoResourceFound() {
-        ProblemDetail errorDetail = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(404), "Resource not found");
-        errorDetail.setProperty("message", "The requested route is not available");
-        return errorDetail;
+    @ExceptionHandler({NoResourceFoundException.class, EntityNotFoundException.class})
+    public ProblemDetail handleNotFound(Exception ex) {
+        return createProblem(HttpStatus.NOT_FOUND, "Resource not found", ex.getMessage());
     }
 
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ProblemDetail handleHttpMessageNotReadable() {
-        ProblemDetail errorDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatusCode.valueOf(400),
-                "Invalid request body"
-        );
-        errorDetail.setProperty("message", "The request body is invalid or malformed");
-        return errorDetail;
+    @ExceptionHandler({HttpMessageNotReadableException.class, IllegalArgumentException.class, IllegalStateException.class})
+    public ProblemDetail handleBadRequest(Exception ex) {
+        return createProblem(HttpStatus.BAD_REQUEST, "Invalid request", ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ProblemDetail handleValidationException(MethodArgumentNotValidException ex) {
+    public ProblemDetail handleValidation(MethodArgumentNotValidException ex) {
         String errors = ex
                 .getBindingResult()
                 .getFieldErrors()
                 .stream()
-                .map(fieldError -> String.format("'%s' %s", fieldError.getField(), fieldError.getDefaultMessage()))
+                .map(f -> String.format("'%s' %s", f.getField(), f.getDefaultMessage()))
                 .collect(Collectors.joining(", "));
-
-        ProblemDetail errorDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatusCode.valueOf(400),
-                "Validation error in the submitted data."
-        );
-        errorDetail.setProperty("message", errors);
-        return errorDetail;
+        return createProblem(HttpStatus.BAD_REQUEST, "Validation error", errors);
     }
 
-    @ExceptionHandler(Exception.class)
-    public ProblemDetail handleGenericException(Exception ex) {
-        logger.error("Unexpected error occurred", ex);
+    @ExceptionHandler(TransientAiException.class)
+    public ProblemDetail handleAiRetryable() {
+        return createProblem(HttpStatus.TOO_MANY_REQUESTS, "Too many requests", "AI service rate limit exceeded.");
+    }
 
-        ProblemDetail errorDetail = ProblemDetail.forStatusAndDetail(
-                HttpStatusCode.valueOf(500),
-                "Internal Server Error"
+    @ExceptionHandler(NonTransientAiException.class)
+    public ProblemDetail handleAiFatal(NonTransientAiException ex) {
+        HttpStatusCode status = switch (ex.getMessage()) {
+            case String s when s.contains("400") -> HttpStatus.BAD_REQUEST;
+            case String s when s.contains("429") -> HttpStatus.TOO_MANY_REQUESTS;
+            case String s when s.contains("503") -> HttpStatus.SERVICE_UNAVAILABLE;
+            case String s when s.contains("504") -> HttpStatus.GATEWAY_TIMEOUT;
+            default -> HttpStatus.INTERNAL_SERVER_ERROR;
+        };
+
+        logger.warn("AI Error: {}", status);
+        return ProblemDetail.forStatusAndDetail(status, "AI service error");
+    }
+
+    @ExceptionHandler({RuntimeException.class, Exception.class})
+    public ProblemDetail handleGeneric(Exception ex) {
+        logger.error("Unexpected error: {} - {}", ex.getClass().getSimpleName(), ex.getMessage());
+        return createProblem(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Internal Server Error",
+                "An unexpected error occurred."
         );
-        errorDetail.setProperty("message", "An unexpected error occurred. Please try again later.");
-        return errorDetail;
+    }
+
+    private ProblemDetail createProblem(HttpStatusCode status, String title, String message) {
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(status, title);
+        pd.setProperty("message", message);
+        return pd;
     }
 }

@@ -46,14 +46,10 @@ public class SourceController {
             @Valid @RequestBody SourceCreationDTO sourceCreationDTO,
             @RequestParam(name = "aiConverter", defaultValue = "false") boolean aiConverter
     ) {
-        try {
-            var source = sourceService.addSource(notebookId, sourceCreationDTO, aiConverter);
-            return source != null ?
-                    ResponseEntity.status(HttpStatus.CREATED).body(source) :
-                    ResponseEntity.badRequest().build();
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
-        }
+        var source = sourceService.addSource(notebookId, sourceCreationDTO, aiConverter);
+        return source != null ?
+                ResponseEntity.status(HttpStatus.CREATED).body(source) :
+                ResponseEntity.badRequest().build();
     }
 
     @PostMapping("/upload")
@@ -64,26 +60,18 @@ public class SourceController {
             @RequestParam(name = "icon", required = false) String icon,
             @RequestParam(name = "aiConverter", defaultValue = "false") boolean aiConverter
     ) {
-        try {
-            if (file.isEmpty()) {
-                return ResponseEntity.badRequest().build();
-            }
-            if (title == null || title.trim().isEmpty()) {
-                return ResponseEntity.badRequest().build();
-            }
-            var sourceFileCreationDTO = new SourceFileCreationDTO(icon, title.trim());
-
-            var source = sourceService.addSourceFromFile(notebookId, sourceFileCreationDTO, file, aiConverter);
-            return source != null ?
-                    ResponseEntity.status(HttpStatus.CREATED).body(source) :
-                    ResponseEntity.badRequest().build();
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("File cannot be empty");
         }
+        if (title == null || title.trim().isEmpty()) {
+            throw new IllegalArgumentException("Title cannot be empty");
+        }
+        var sourceFileCreationDTO = new SourceFileCreationDTO(icon, title.trim());
+
+        var source = sourceService.addSourceFromFile(notebookId, sourceFileCreationDTO, file, aiConverter);
+        return source != null ?
+                ResponseEntity.status(HttpStatus.CREATED).body(source) :
+                ResponseEntity.badRequest().build();
     }
 
     @PutMapping
@@ -102,53 +90,30 @@ public class SourceController {
             @PathVariable UUID notebookId,
             @PathVariable UUID sourceId
     ) {
-        try {
-            var source = sourceService.deleteSource(notebookId, sourceId);
-            return source != null ?
-                    ResponseEntity.ok(source) :
-                    ResponseEntity.notFound().build();
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        var source = sourceService.deleteSource(notebookId, sourceId);
+        return source != null ?
+                ResponseEntity.ok(source) :
+                ResponseEntity.notFound().build();
     }
 
     @PostMapping("{sourceId}/summary")
     public ResponseEntity<String> generateSourceSummary(@PathVariable UUID notebookId, @PathVariable UUID sourceId) {
-        try {
-            String summary = sourceService.generateSummary(notebookId, sourceId);
-            return summary != null ?
-                    ResponseEntity.ok(summary) :
-                    ResponseEntity.notFound().build();
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        String summary = sourceService.generateSummary(notebookId, sourceId);
+        return ResponseEntity.ok(summary);
     }
 
     @GetMapping("{sourceId}/summary")
     public ResponseEntity<String> getSourceSummary(@PathVariable UUID notebookId, @PathVariable UUID sourceId) {
-        try {
-            String summary = sourceService.getSummary(notebookId, sourceId);
-            return ResponseEntity.ok(summary);
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        String summary = sourceService.getSummary(notebookId, sourceId);
+        return ResponseEntity.ok(summary);
     }
 
     @DeleteMapping("{sourceId}/summary")
     public ResponseEntity<Void> deleteSourceSummary(@PathVariable UUID notebookId, @PathVariable UUID sourceId) {
-        try {
-            boolean deleted = sourceService.deleteSummary(notebookId, sourceId);
-            return deleted ?
-                    ResponseEntity.noContent().build() :
-                    ResponseEntity.notFound().build();
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        boolean deleted = sourceService.deleteSummary(notebookId, sourceId);
+        if (!deleted) {
+            return ResponseEntity.notFound().build();
         }
+        return ResponseEntity.noContent().build();
     }
 }

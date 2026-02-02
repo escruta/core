@@ -77,107 +77,90 @@ class ChatController {
 
     @PostMapping("summary")
     ResponseEntity<String> generateSummary(@PathVariable UUID notebookId) {
-        try {
-            Optional<String> context = getNotebookContext(notebookId, 5);
+        Optional<String> context = getNotebookContext(notebookId, 5);
 
-            if (context.isEmpty()) {
-                return ResponseEntity.badRequest().body("No sources available or content not yet indexed.");
-            }
-
-            SummaryResponse summary = ChatClient
-                    .create(chatModel)
-                    .prompt()
-                    .system(UNIFIED_SUMMARY_SYSTEM_MESSAGE)
-                    .user("Write a summary paragraph about this:\n\n" + context.get())
-                    .call()
-                    .entity(SummaryResponse.class);
-
-            assert summary != null;
-            notebookRepository.updateSummary(notebookId, summary.summary());
-            return ResponseEntity.ok(summary.summary());
-        } catch (Exception e) {
-            return ResponseEntity
-                    .internalServerError()
-                    .body("An error occurred while generating the summary. Please try again.");
+        if (context.isEmpty()) {
+            throw new IllegalStateException("No sources available or content not yet indexed");
         }
+
+        notebookRepository.updateSummary(notebookId, null);
+
+        SummaryResponse summary = ChatClient
+                .create(chatModel)
+                .prompt()
+                .system(UNIFIED_SUMMARY_SYSTEM_MESSAGE)
+                .user("Write a summary paragraph about this:\n\n" + context.get())
+                .call()
+                .entity(SummaryResponse.class);
+
+        if (summary == null || summary.summary() == null || summary.summary().trim().isEmpty()) {
+            throw new RuntimeException("Failed to generate summary: empty response from AI");
+        }
+
+        notebookRepository.updateSummary(notebookId, summary.summary());
+        return ResponseEntity.ok(summary.summary());
     }
 
     @GetMapping("summary")
     ResponseEntity<String> getSummary(@PathVariable UUID notebookId) {
-        try {
-            var notebook = notebookRepository.findById(notebookId).orElse(null);
+        var notebook = notebookRepository.findById(notebookId).orElse(null);
 
-            if (notebook == null) {
-                return ResponseEntity.notFound().build();
-            }
-
-            String summary = notebook.getSummary();
-            if (summary == null || summary.trim().isEmpty()) {
-                return ResponseEntity.ok("");
-            }
-
-            return ResponseEntity.ok(summary);
-        } catch (Exception e) {
-            return ResponseEntity
-                    .internalServerError()
-                    .body("An error occurred while retrieving the summary. Please try again.");
+        if (notebook == null) {
+            return ResponseEntity.notFound().build();
         }
+
+        String summary = notebook.getSummary();
+        if (summary == null || summary.trim().isEmpty()) {
+            return ResponseEntity.ok("");
+        }
+
+        return ResponseEntity.ok(summary);
     }
 
     @DeleteMapping("summary")
     ResponseEntity<Void> deleteSummary(@PathVariable UUID notebookId) {
-        try {
-            var notebook = notebookRepository.findById(notebookId).orElse(null);
+        var notebook = notebookRepository.findById(notebookId).orElse(null);
 
-            if (notebook == null) {
-                return ResponseEntity.notFound().build();
-            }
-
-            notebookRepository.updateSummary(notebookId, null);
-            return ResponseEntity.noContent().build();
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
+        if (notebook == null) {
+            return ResponseEntity.notFound().build();
         }
+
+        notebookRepository.updateSummary(notebookId, null);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("example-questions")
     public ResponseEntity<?> getExampleQuestions(@PathVariable UUID notebookId) {
-        try {
-            Optional<String> context = getNotebookContext(notebookId, 3);
+        Optional<String> context = getNotebookContext(notebookId, 3);
 
-            if (context.isEmpty()) {
-                return ResponseEntity.ok(List.of());
-            }
-
-            ExampleQuestions exampleQuestions = ChatClient.create(chatModel).prompt().user("""
-                    Generate exactly 3 questions based on this text.
-                    
-                    RULES:
-                    - Questions must be about the SUBJECT MATTER, not about the text itself
-                    - Do NOT mention "article", "document", "text", "source", or "Wikipedia"
-                    - Do NOT ask what the topic is or what is covered
-                    - Ask questions that someone studying this subject would ask
-                    - Each question must be answerable using ONLY the provided information
-                    
-                    %s
-                    """.formatted(context.get())).call().entity(ExampleQuestions.class);
-
-            if (exampleQuestions != null && exampleQuestions.questions() != null) {
-                List<String> limitedQuestions = exampleQuestions
-                        .questions()
-                        .stream()
-                        .filter(q -> q != null && !q.isBlank())
-                        .limit(3)
-                        .toList();
-                return ResponseEntity.ok(new ExampleQuestions(limitedQuestions));
-            }
-
-            return ResponseEntity.ok(new ExampleQuestions(List.of()));
-        } catch (Exception e) {
-            return ResponseEntity
-                    .internalServerError()
-                    .body("An error occurred while generating the questions. Please try again.");
+        if (context.isEmpty()) {
+            return ResponseEntity.ok(List.of());
         }
+
+        ExampleQuestions exampleQuestions = ChatClient.create(chatModel).prompt().user("""
+                Generate exactly 3 questions based on this text.
+                
+                RULES:
+                - Questions must be about the SUBJECT MATTER, not about the text itself
+                - Do NOT mention "article", "document", "text", "source", or "Wikipedia"
+                - Do NOT ask what the topic is or what is covered
+                - Ask questions that someone studying this subject would ask
+                - Each question must be answerable using ONLY the provided information
+                
+                %s
+                """.formatted(context.get())).call().entity(ExampleQuestions.class);
+
+        if (exampleQuestions != null && exampleQuestions.questions() != null) {
+            List<String> limitedQuestions = exampleQuestions
+                    .questions()
+                    .stream()
+                    .filter(q -> q != null && !q.isBlank())
+                    .limit(3)
+                    .toList();
+            return ResponseEntity.ok(new ExampleQuestions(limitedQuestions));
+        }
+
+        return ResponseEntity.ok(new ExampleQuestions(List.of()));
     }
 
     @PostMapping("chat")
@@ -185,59 +168,49 @@ class ChatController {
             @PathVariable UUID notebookId,
             @Valid @RequestBody ChatRequest request
     ) {
-        try {
-            ChatMemory chatMemory = MessageWindowChatMemory
-                    .builder()
-                    .chatMemoryRepository(chatMemoryRepository)
-                    .maxMessages(10)
-                    .build();
+        ChatMemory chatMemory = MessageWindowChatMemory
+                .builder()
+                .chatMemoryRepository(chatMemoryRepository)
+                .maxMessages(10)
+                .build();
 
-            var chatClient = ChatClient.builder(chatModel).defaultSystem(UNIFIED_SYSTEM_MESSAGE).defaultAdvisors(
-                    MessageChatMemoryAdvisor.builder(chatMemory).build(),
-                    retrievalService.getQuestionAnswerAdvisor(notebookId)
-            ).build();
+        var chatClient = ChatClient.builder(chatModel).defaultSystem(UNIFIED_SYSTEM_MESSAGE).defaultAdvisors(
+                MessageChatMemoryAdvisor.builder(chatMemory).build(),
+                retrievalService.getQuestionAnswerAdvisor(notebookId)
+        ).build();
 
-            String conversationId = request.conversationId() != null ?
-                    request.conversationId() :
-                    UUID.randomUUID().toString();
+        String conversationId = request.conversationId() != null ?
+                request.conversationId() :
+                UUID.randomUUID().toString();
 
-            var chatResponse = chatClient
-                    .prompt()
-                    .advisors(advisorSpec -> advisorSpec.param(ChatMemory.CONVERSATION_ID, conversationId))
-                    .user(request.userInput())
-                    .call()
-                    .chatResponse();
+        var chatResponse = chatClient
+                .prompt()
+                .advisors(advisorSpec -> advisorSpec.param(ChatMemory.CONVERSATION_ID, conversationId))
+                .user(request.userInput())
+                .call()
+                .chatResponse();
 
-            assert chatResponse != null;
-            List<Document> documents = chatResponse
-                    .getMetadata()
-                    .getOrDefault(QuestionAnswerAdvisor.RETRIEVED_DOCUMENTS, List.of());
+        assert chatResponse != null;
+        List<Document> documents = chatResponse
+                .getMetadata()
+                .getOrDefault(QuestionAnswerAdvisor.RETRIEVED_DOCUMENTS, List.of());
 
-            List<ChatReplyMessage.CitedSource> citedSources = documents
-                    .stream()
-                    .map(doc -> new ChatReplyMessage.CitedSource(
-                            UUID.fromString(doc
-                                    .getMetadata()
-                                    .get("sourceId")
-                                    .toString()),
-                            doc.getMetadata().get("title").toString()
-                    ))
-                    .distinct()
-                    .toList();
+        List<ChatReplyMessage.CitedSource> citedSources = documents
+                .stream()
+                .map(doc -> new ChatReplyMessage.CitedSource(
+                        UUID.fromString(doc
+                                .getMetadata()
+                                .get("sourceId")
+                                .toString()),
+                        doc.getMetadata().get("title").toString()
+                ))
+                .distinct()
+                .toList();
 
-            return ResponseEntity.ok(new ChatReplyMessage(
-                    chatResponse.getResult().getOutput().getText(),
-                    conversationId,
-                    citedSources
-            ));
-        } catch (Exception e) {
-            return ResponseEntity
-                    .internalServerError()
-                    .body(new ChatReplyMessage(
-                            "An error occurred while processing your request. Please try again.",
-                            null,
-                            List.of()
-                    ));
-        }
+        return ResponseEntity.ok(new ChatReplyMessage(
+                chatResponse.getResult().getOutput().getText(),
+                conversationId,
+                citedSources
+        ));
     }
 }

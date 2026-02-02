@@ -11,6 +11,7 @@ import com.escruta.core.mappers.SourceMapper;
 import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.repositories.SourceRepository;
 import io.github.furstenheim.CopyDown;
+import jakarta.persistence.EntityNotFoundException;
 import org.jsoup.Jsoup;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -241,18 +242,6 @@ public class SourceService {
         return new SourceWithContentDTO(source);
     }
 
-    private void generateAndSetSummary(Source source) {
-        try {
-            Prompt prompt = getPrompt(source);
-            var response = chatModel.call(prompt);
-            String summary = response.getResult().getOutput().getText();
-
-            source.setSummary(summary);
-            sourceRepository.save(source);
-        } catch (Exception ignored) {
-        }
-    }
-
     private static Prompt getPrompt(Source source) {
         String systemPrompt = """
                 You are an expert content summarizer. Your task is to create a concise summary of the provided content.
@@ -267,7 +256,7 @@ public class SourceService {
     public String generateSummary(UUID notebookId, UUID sourceId) {
         Optional<Source> sourceOptional = sourceRepository.findById(sourceId);
         if (sourceOptional.isEmpty()) {
-            return null;
+            throw new EntityNotFoundException("Source not found with id: " + sourceId);
         }
 
         Source source = sourceOptional.get();
@@ -275,8 +264,16 @@ public class SourceService {
             throw new SecurityException("Source does not belong to this notebook.");
         }
 
-        generateAndSetSummary(source);
-        return source.getSummary();
+        source.setSummary(null);
+        sourceRepository.save(source);
+
+        Prompt prompt = getPrompt(source);
+        var response = chatModel.call(prompt);
+        String summary = response.getResult().getOutput().getText();
+
+        source.setSummary(summary);
+        sourceRepository.save(source);
+        return summary;
     }
 
     public String getSummary(UUID notebookId, UUID sourceId) {
