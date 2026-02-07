@@ -247,6 +247,7 @@ public class SourceService {
                 You are an expert content summarizer. Your task is to create a concise summary of the provided content.
                 The summary should be 2-3 sentences that capture the essential information and main points.
                 Focus on the key concepts, findings, or conclusions presented in the content.
+                Use **bold** for key terms and *italic* for emphasis (sparingly).
                 """;
 
         UserMessage userMessage = new UserMessage(source.getContent());
