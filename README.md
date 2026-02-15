@@ -9,15 +9,6 @@ handles the business logic, document processing, AI orchestration, and persisten
 > This backend service is a central part of the Escruta ecosystem. It requires a PostgreSQL database with the `pgvector`
 > extension and access to an OpenAI-compatible API to function correctly.
 
-## Technology Stack
-
-- **Runtime**: Java 21 with Gradle for build management.
-- **Framework**: Spring Boot 3.5 for robust backend development.
-- **AI Integration**: Spring AI for seamless interaction with Large Language Models.
-- **Database**: PostgreSQL with `pgvector` for search and vector similarity.
-- **Security**: Spring Security (OAuth 2.0 Resource Server Opaque Token) for stateless authentication.
-- **Object Mapping**: Project Lombok to reduce boilerplate code.
-
 ## Getting Started
 
 ### Prerequisites
@@ -38,12 +29,6 @@ handles the business logic, document processing, AI orchestration, and persisten
 - `./gradlew bootRun` - Start the development server
 
 The backend service will be available at [localhost:8080](http://localhost:8080) by default.
-
-### Development Scripts
-
-- `./gradlew bootRun` - Start development server
-- `./gradlew build` - Build the application
-- `./gradlew clean` - Clean the build directory
 
 ## Configuration
 
@@ -70,3 +55,51 @@ application at runtime.
 | `ESCRUTA_CORS_ALLOWED_ORIGINS`     | Allowed origins for CORS             | `http://localhost:5173`                    |
 
 See [application.yml](./src/main/resources/application.yml) for the full list of configuration options.
+
+### Development Scripts
+
+- `./gradlew bootRun` - Start development server
+- `./gradlew build` - Build the application
+- `./gradlew clean` - Clean the build directory
+
+## Testing
+
+Tests run against a dedicated PostgreSQL database (`escruta_test`) to ensure consistency with production. Jacoco
+generates coverage reports automatically after test execution.
+
+### Prerequisites
+
+Ensure you have a PostgreSQL database named `escruta_test`:
+
+```bash
+psql -U postgres -c "CREATE DATABASE escruta_test;"
+```
+
+### Running Tests
+
+```bash
+./gradlew test                                  # Run all tests
+./gradlew test --tests "NotebookServiceTest"    # Run specific test class
+./gradlew test --tests "*ControllerTest"        # Run all controller tests
+```
+
+After running tests, find the coverage report at `build/reports/jacoco/test/html/index.html`.
+
+See [application-test.yml](./src/test/resources/application-test.yml) for the test database configuration.
+
+### Test Organization
+
+Tests are organized by layer:
+
+- `controllers/` - HTTP endpoint tests with mocked security
+- `services/` - Business logic unit tests
+- `integration/` - End-to-end user journey tests
+
+## Technology Stack
+
+- **Runtime**: Java 21 with Gradle for build management.
+- **Framework**: Spring Boot 3.5 for robust backend development.
+- **AI Integration**: Spring AI for seamless interaction with Large Language Models.
+- **Database**: PostgreSQL with `pgvector` for search and vector similarity.
+- **Security**: Spring Security (OAuth 2.0 Resource Server Opaque Token) for stateless authentication.
+- **Object Mapping**: Project Lombok to reduce boilerplate code.
