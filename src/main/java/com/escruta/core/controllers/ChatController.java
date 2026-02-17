@@ -176,7 +176,7 @@ class ChatController {
 
         var chatClient = ChatClient.builder(chatModel).defaultSystem(UNIFIED_SYSTEM_MESSAGE).defaultAdvisors(
                 MessageChatMemoryAdvisor.builder(chatMemory).build(),
-                retrievalService.getQuestionAnswerAdvisor(notebookId)
+                retrievalService.getQuestionAnswerAdvisor(notebookId, request.selectedSourceIds())
         ).build();
 
         String conversationId = request.conversationId() != null ?

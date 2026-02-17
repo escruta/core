@@ -17,18 +17,34 @@ import java.util.UUID;
 public class RetrievalService {
     private final VectorStore vectorStore;
 
-    public QuestionAnswerAdvisor getQuestionAnswerAdvisor(UUID notebookId) {
+    public QuestionAnswerAdvisor getQuestionAnswerAdvisor(UUID notebookId, List<UUID> selectedSourceIds) {
+        Filter.Expression notebookFilter = new Filter.Expression(
+                Filter.ExpressionType.EQ,
+                new Filter.Key("notebookId"),
+                new Filter.Value(notebookId.toString())
+        );
+
+        Filter.Expression finalFilter = notebookFilter;
+
+        if (selectedSourceIds != null && !selectedSourceIds.isEmpty()) {
+            List<String> sourceIdStrings = selectedSourceIds.stream().map(UUID::toString).toList();
+
+            Filter.Expression sourceFilter = new Filter.Expression(
+                    Filter.ExpressionType.IN,
+                    new Filter.Key("sourceId"),
+                    new Filter.Value(sourceIdStrings)
+            );
+
+            finalFilter = new Filter.Expression(Filter.ExpressionType.AND, notebookFilter, sourceFilter);
+        }
+
         return QuestionAnswerAdvisor
                 .builder(vectorStore)
                 .searchRequest(SearchRequest
                         .builder()
                         .topK(5)
                         .similarityThreshold(0.0)
-                        .filterExpression(new Filter.Expression(
-                                Filter.ExpressionType.EQ,
-                                new Filter.Key("notebookId"),
-                                new Filter.Value(notebookId.toString())
-                        ))
+                        .filterExpression(finalFilter)
                         .build())
                 .build();
     }
