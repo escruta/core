@@ -4,6 +4,8 @@ import com.escruta.core.dtos.ChatRequest;
 import com.escruta.core.dtos.ChatReplyMessage;
 import com.escruta.core.dtos.ExampleQuestions;
 import com.escruta.core.dtos.SummaryResponse;
+import com.escruta.core.entities.Conversation;
+import com.escruta.core.repositories.ConversationRepository;
 import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.services.SourceService;
 import com.escruta.core.services.RetrievalService;
@@ -51,6 +53,7 @@ class ChatController {
     private final RetrievalService retrievalService;
     private final ChatModel chatModel;
     private final NotebookRepository notebookRepository;
+    private final ConversationRepository conversationRepository;
     private final JdbcChatMemoryRepository chatMemoryRepository;
 
     private Optional<String> getNotebookContext(UUID notebookId, int documentLimit) {
@@ -168,6 +171,11 @@ class ChatController {
             @PathVariable UUID notebookId,
             @Valid @RequestBody ChatRequest request
     ) {
+        var notebook = notebookRepository.findById(notebookId).orElse(null);
+        if (notebook == null) {
+            return ResponseEntity.notFound().build();
+        }
+
         ChatMemory chatMemory = MessageWindowChatMemory
                 .builder()
                 .chatMemoryRepository(chatMemoryRepository)
@@ -191,6 +199,20 @@ class ChatController {
                 .chatResponse();
 
         assert chatResponse != null;
+
+        Conversation conversation = conversationRepository.findById(conversationId).orElse(null);
+        if (conversation == null) {
+            conversation = new Conversation();
+            conversation.setId(conversationId);
+            conversation.setNotebook(notebook);
+            String title = request.userInput();
+            if (title.length() > 100) {
+                title = title.substring(0, 97) + "...";
+            }
+            conversation.setTitle(title);
+        }
+        conversationRepository.save(conversation);
+
         List<Document> documents = chatResponse
                 .getMetadata()
                 .getOrDefault(QuestionAnswerAdvisor.RETRIEVED_DOCUMENTS, List.of());

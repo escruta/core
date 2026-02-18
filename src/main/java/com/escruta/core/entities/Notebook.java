@@ -44,6 +44,9 @@ public class Notebook {
     @OneToMany(mappedBy = "notebook", cascade = CascadeType.REMOVE, orphanRemoval = true)
     private List<GenerationJob> generationJobs;
 
+    @OneToMany(mappedBy = "notebook", cascade = CascadeType.REMOVE, orphanRemoval = true)
+    private List<Conversation> conversations;
+
     @CreationTimestamp
     @Column(updatable = false)
     private Timestamp createdAt;
