@@ -36,6 +36,10 @@ class ChatController {
             2. Write in a natural, conversational tone
             3. Use simple formatting only: **bold**, *italic*, `code`
             4. Focus on directly answering the user's question with the information from the sources
+            5. For mathematical expressions, ALWAYS use LaTeX format with dollar signs:
+               - Inline math: $...$ (e.g., $\\alpha$, $|0\\rangle$, $\\psi$)
+               - Block math: $$...$$ (e.g., $$|\\psi\\rangle = \\alpha|0\\rangle + \\beta|1\\rangle$$)
+               - NEVER use parentheses like (\\alpha) or (|0\\rangle)
             """;
 
     private static final String UNIFIED_SUMMARY_SYSTEM_MESSAGE = """
