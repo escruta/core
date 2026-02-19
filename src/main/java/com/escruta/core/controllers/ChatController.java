@@ -145,14 +145,27 @@ class ChatController {
         }
 
         ExampleQuestions exampleQuestions = ChatClient.create(chatModel).prompt().user("""
-                Generate exactly 3 questions based on this text.
+                Generate exactly 3 questions that help understand the core concepts of this subject.
                 
                 RULES:
-                - Questions must be about the SUBJECT MATTER, not about the text itself
+                - Focus on FUNDAMENTAL CONCEPTS and key ideas that someone learning this topic must understand
+                - Ask about DEFINITIONS, MECHANISMS, RELATIONSHIPS between concepts, or CAUSE-EFFECT
+                - Questions must be about the SUBJECT MATTER itself, not about the text
                 - Do NOT mention "article", "document", "text", "source", or "Wikipedia"
-                - Do NOT ask what the topic is or what is covered
-                - Ask questions that someone studying this subject would ask
+                - Do NOT ask what the topic is, what is covered, or ask for lists/summaries
+                - Use "why", "how", or "what is the relationship between" type questions
                 - Each question must be answerable using ONLY the provided information
+                - Make questions specific enough to require understanding, not vague general questions
+                
+                BAD examples:
+                - "What is the main topic?" (too vague)
+                - "What does the text say about X?" (about the text)
+                - "List the types of X" (just listing)
+                
+                GOOD examples:
+                - "Why does X happen when Y occurs?" (mechanism/cause-effect)
+                - "How is X different from Y?" (conceptual distinction)
+                - "What is the relationship between X and Y?" (interconnection)
                 
                 %s
                 """.formatted(context.get())).call().entity(ExampleQuestions.class);
