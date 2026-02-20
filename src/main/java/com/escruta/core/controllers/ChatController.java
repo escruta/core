@@ -222,11 +222,30 @@ class ChatController {
             conversation = new Conversation();
             conversation.setId(conversationId);
             conversation.setNotebook(notebook);
-            String title = request.userInput();
+
+            String title;
+            try {
+                title = ChatClient
+                        .create(chatModel)
+                        .prompt()
+                        .system("Generate a very short and concise title (maximum 5 words) for a conversation that starts with the following message. Respond ONLY with the title, without quotes or extra punctuation. Use the same language as the user's message.")
+                        .user(request.userInput())
+                        .call()
+                        .content();
+
+                if (title != null && !title.isBlank()) {
+                    title = title.replaceAll("^[\"']|[\"']$", "");
+                } else {
+                    title = request.userInput();
+                }
+            } catch (Exception e) {
+                title = request.userInput();
+            }
+
             if (title.length() > 100) {
                 title = title.substring(0, 97) + "...";
             }
-            conversation.setTitle(title);
+            conversation.setTitle(title.trim());
         }
         conversationRepository.save(conversation);
 
@@ -249,6 +268,7 @@ class ChatController {
         return ResponseEntity.ok(new ChatReplyMessage(
                 chatResponse.getResult().getOutput().getText(),
                 conversationId,
+                conversation.getTitle(),
                 citedSources
         ));
     }

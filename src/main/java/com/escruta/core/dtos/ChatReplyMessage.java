@@ -6,6 +6,7 @@ import java.util.UUID;
 public record ChatReplyMessage(
         String content,
         String conversationId,
+        String conversationTitle,
         List<CitedSource> citedSources
 ) {
 
