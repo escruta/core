@@ -138,35 +138,53 @@ public class SourceService {
     public SourceWithContentDTO addSource(UUID notebookId, SourceCreationDTO newSourceDto, boolean aiConverter) {
         Optional<Notebook> notebookOptional = notebookRepository.findById(notebookId);
 
-        try {
-            WebContent webContent = fetchWebContent(newSourceDto.link());
-            String content = convertHtmlToMarkdown(webContent.html());
-
-            if (aiConverter) {
-                content = cleanContentWithAI(content);
-            }
-
-            assert notebookOptional.isPresent();
-            Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get(), content, aiConverter);
-            if (source.getTitle() == null || source.getTitle().trim().isEmpty()) {
-                source.setTitle(webContent.title());
-            }
-
-            source = sourceRepository.save(source);
-
-            asyncVectorIndexingService.indexSourceInVectorStore(
-                    notebookId,
-                    source.getId(),
-                    source.getTitle(),
-                    source.getLink(),
-                    content
-            );
-
-            return new SourceWithContentDTO(source);
-
-        } catch (Exception e) {
-            throw new RuntimeException("Error while adding the source: " + e.getMessage(), e);
+        if (notebookOptional.isEmpty()) {
+            throw new EntityNotFoundException("Notebook not found");
         }
+
+        Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get(), "", aiConverter);
+        if (source.getTitle() == null || source.getTitle().trim().isEmpty()) {
+            source.setTitle(newSourceDto.link());
+        }
+        source.setStatus(com.escruta.core.entities.enums.SourceStatus.PENDING);
+        source = sourceRepository.save(source);
+
+        final UUID finalSourceId = source.getId();
+        final String finalLink = newSourceDto.link();
+
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                WebContent webContent = fetchWebContent(finalLink);
+                String content = convertHtmlToMarkdown(webContent.html());
+
+                if (aiConverter) {
+                    content = cleanContentWithAI(content);
+                }
+
+                Source updatedSource = sourceRepository.findById(finalSourceId).orElseThrow();
+                if (updatedSource.getTitle().equals(finalLink)) {
+                    updatedSource.setTitle(webContent.title());
+                }
+                updatedSource.setContent(content);
+                updatedSource.setStatus(com.escruta.core.entities.enums.SourceStatus.READY);
+                sourceRepository.save(updatedSource);
+
+                asyncVectorIndexingService.indexSourceInVectorStore(
+                        notebookId,
+                        finalSourceId,
+                        updatedSource.getTitle(),
+                        finalLink,
+                        content
+                );
+            } catch (Exception e) {
+                sourceRepository.findById(finalSourceId).ifPresent(s -> {
+                    s.setStatus(com.escruta.core.entities.enums.SourceStatus.FAILED);
+                    sourceRepository.save(s);
+                });
+            }
+        });
+
+        return new SourceWithContentDTO(source);
     }
 
     public SourceResponseDTO updateSource(UUID notebookId, SourceUpdateDTO newSource) {
@@ -213,31 +231,58 @@ public class SourceService {
             throw new RuntimeException("Unsupported file type: " + file.getContentType());
         }
 
-        String content;
-        try {
-            content = fileTextExtractionService.extractTextFromFile(file);
-            if (content == null || content.trim().isEmpty()) {
-                throw new RuntimeException("No text content could be extracted from the file");
-            }
-
-            if (aiConverter) {
-                content = cleanContentWithAI(content);
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Error processing file: " + e.getMessage(), e);
+        if (notebookOptional.isEmpty()) {
+            throw new EntityNotFoundException("Notebook not found");
         }
 
-        assert notebookOptional.isPresent();
-        Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get(), content, aiConverter);
+        Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get(), "", aiConverter);
+        source.setStatus(com.escruta.core.entities.enums.SourceStatus.PENDING);
         source = sourceRepository.save(source);
 
-        asyncVectorIndexingService.indexSourceInVectorStore(
-                notebookId,
-                source.getId(),
-                source.getTitle(),
-                source.getLink(),
-                content
-        );
+        final UUID finalSourceId = source.getId();
+        final String fileContentType = file.getContentType();
+        final String originalFilename = file.getOriginalFilename();
+
+        try {
+            final byte[] fileBytes = file.getBytes();
+
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    String content = fileTextExtractionService.extractTextFromFile(
+                            fileBytes,
+                            originalFilename,
+                            fileContentType
+                    );
+                    if (content == null || content.trim().isEmpty()) {
+                        throw new RuntimeException("No text content could be extracted from the file");
+                    }
+
+                    if (aiConverter) {
+                        content = cleanContentWithAI(content);
+                    }
+
+                    Source updatedSource = sourceRepository.findById(finalSourceId).orElseThrow();
+                    updatedSource.setContent(content);
+                    updatedSource.setStatus(com.escruta.core.entities.enums.SourceStatus.READY);
+                    sourceRepository.save(updatedSource);
+
+                    asyncVectorIndexingService.indexSourceInVectorStore(
+                            notebookId,
+                            finalSourceId,
+                            updatedSource.getTitle(),
+                            updatedSource.getLink(),
+                            content
+                    );
+                } catch (Exception e) {
+                    sourceRepository.findById(finalSourceId).ifPresent(s -> {
+                        s.setStatus(com.escruta.core.entities.enums.SourceStatus.FAILED);
+                        sourceRepository.save(s);
+                    });
+                }
+            });
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to read file bytes: " + e.getMessage(), e);
+        }
 
         return new SourceWithContentDTO(source);
     }

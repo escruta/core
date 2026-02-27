@@ -5,16 +5,14 @@ import org.springframework.ai.reader.pdf.PagePdfDocumentReader;
 import org.springframework.ai.reader.tika.TikaDocumentReader;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.List;
 
 @Service
 public class FileTextExtractionService {
-    public String extractTextFromFile(MultipartFile file) {
+    public String extractTextFromFile(byte[] bytes, String filename, String contentType) {
         try {
-            var documents = getDocuments(file);
+            var documents = getDocuments(bytes, filename, contentType);
 
             var content = new StringBuilder();
             for (var document : documents) {
@@ -27,17 +25,17 @@ public class FileTextExtractionService {
         }
     }
 
-    private static List<Document> getDocuments(MultipartFile file) throws IOException {
-        var resource = new ByteArrayResource(file.getBytes()) {
+    private static List<Document> getDocuments(byte[] bytes, String filename, String contentType) {
+        var resource = new ByteArrayResource(bytes) {
             @Override
             public String getFilename() {
-                return file.getOriginalFilename();
+                return filename;
             }
         };
 
         List<Document> documents;
 
-        if ("application/pdf".equals(file.getContentType())) {
+        if ("application/pdf".equals(contentType)) {
             PagePdfDocumentReader pdfReader = new PagePdfDocumentReader(resource);
             documents = pdfReader.get();
         } else {
