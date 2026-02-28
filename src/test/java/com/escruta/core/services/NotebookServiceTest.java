@@ -5,8 +5,8 @@ import com.escruta.core.dtos.notebook.NotebookCreationDTO;
 import com.escruta.core.dtos.notebook.NotebookResponseDTO;
 import com.escruta.core.dtos.notebook.NotebookUpdateDTO;
 import com.escruta.core.dtos.notebook.NotebookWithDetailsDTO;
+import com.escruta.core.dtos.source.SourceResponseDTO;
 import com.escruta.core.entities.Notebook;
-import com.escruta.core.entities.Source;
 import com.escruta.core.entities.User;
 import com.escruta.core.mappers.NotebookMapper;
 import com.escruta.core.repositories.NotebookRepository;
@@ -85,7 +85,7 @@ class NotebookServiceTest {
         User user = createUser();
         Notebook notebook = createNotebook(NOTEBOOK_ID, "Test Notebook", user);
         List<NoteResponseDTO> notes = List.of();
-        List<Source> sources = List.of();
+        List<SourceResponseDTO> sources = List.of();
 
         when(notebookRepository.findById(NOTEBOOK_ID)).thenReturn(Optional.of(notebook));
         when(noteService.getNotes(NOTEBOOK_ID)).thenReturn(notes);

@@ -5,7 +5,6 @@ import com.escruta.core.dtos.notebook.NotebookResponseDTO;
 import com.escruta.core.dtos.notebook.NotebookUpdateDTO;
 import com.escruta.core.dtos.notebook.NotebookWithDetailsDTO;
 import com.escruta.core.entities.Notebook;
-import com.escruta.core.entities.Source;
 import com.escruta.core.mappers.NotebookMapper;
 import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.repositories.SourceRepository;
@@ -34,7 +33,7 @@ public class NotebookService {
         if (notebookOptional.isPresent()) {
             Notebook notebook = notebookOptional.get();
             var notes = noteService.getNotes(id);
-            List<Source> sources = sourceRepository.findByNotebookId(id);
+            var sources = sourceRepository.findByNotebookId(id);
             return Optional.of(new NotebookWithDetailsDTO(notebook, notes, sources));
         }
 

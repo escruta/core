@@ -123,7 +123,7 @@ public class SourceService {
     }
 
     public List<SourceResponseDTO> getSources(UUID notebookId) {
-        return sourceRepository.findByNotebookId(notebookId).stream().map(SourceResponseDTO::new).toList();
+        return sourceRepository.findByNotebookId(notebookId);
     }
 
     public SourceWithContentDTO getSource(UUID notebookId, UUID sourceId) {
