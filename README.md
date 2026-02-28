@@ -6,22 +6,23 @@ _"Think, ask, learn"_
 handles the business logic, document processing, AI orchestration, and persistent storage for your research data.
 
 > [!IMPORTANT]
-> This backend service is a central part of the Escruta ecosystem. It requires a PostgreSQL database with the `pgvector`
-> extension and access to an OpenAI-compatible API to function correctly.
+> This backend service is a central part of the Escruta ecosystem. It requires a PostgreSQL database for relational
+> data, a Qdrant database for vector search, and access to an OpenAI-compatible API to function correctly.
 
 ## Getting Started
 
 ### Prerequisites
 
 - Java Development Kit (JDK) 21 or higher.
-- PostgreSQL (version 15 or higher) with `pgvector` extension.
+- PostgreSQL (version 16 or higher).
+- Qdrant (for vector search).
 - An OpenAI-compatible API.
 
 > [!TIP]
-> You can use the official [`pgvector/pgvector`](https://hub.docker.com/r/pgvector/pgvector) Docker image, which
-> includes PostgreSQL with `pgvector` pre-installed:
+> You can use Docker to quickly spin up both PostgreSQL and Qdrant:
 > ```bash
-> docker run -d --name escruta-db -p 5432:5432 -e POSTGRES_PASSWORD=1234 -e POSTGRES_DB=escruta pgvector/pgvector:pg16
+> docker run -d --name escruta-db -p 5432:5432 -e POSTGRES_PASSWORD=1234 -e POSTGRES_DB=escruta postgres
+> docker run -d --name escruta-qdrant -p 6333:6333 -p 6334:6334 qdrant/qdrant
 > ```
 
 ### Installation
@@ -52,6 +53,10 @@ application at runtime.
 | `ESCRUTA_AI_EMBEDDING_PATH`        | Path for embeddings endpoint         | `/v1/embeddings`                           |
 | `ESCRUTA_AI_EMBEDDING_BASE_URL`    | Base URL for embeddings (if differs) | `ESCRUTA_AI_BASE_URL`                      |
 | `ESCRUTA_AI_EMBEDDING_API_KEY`     | API Key for embeddings (if differs)  | `ESCRUTA_AI_API_KEY`                       |
+| `ESCRUTA_QDRANT_HOST`              | Qdrant database host                 | `localhost`                                |
+| `ESCRUTA_QDRANT_PORT`              | Qdrant database port                 | `6334`                                     |
+| `ESCRUTA_QDRANT_API_KEY`           | API Key for Qdrant (if required)     |                                            |
+| `ESCRUTA_QDRANT_COLLECTION`        | Qdrant collection name               | `escruta`                                  |
 | `ESCRUTA_CORS_ALLOWED_ORIGINS`     | Allowed origins for CORS             | `http://localhost:5173`                    |
 
 See [application.yml](./src/main/resources/application.yml) for the full list of configuration options.
@@ -100,6 +105,6 @@ Tests are organized by layer:
 - **Runtime**: Java 21 with Gradle for build management.
 - **Framework**: Spring Boot 3.5 for robust backend development.
 - **AI Integration**: Spring AI for seamless interaction with Large Language Models.
-- **Database**: PostgreSQL with `pgvector` for search and vector similarity.
+- **Database**: PostgreSQL for relational data and Qdrant for vector similarity search.
 - **Security**: Spring Security (OAuth 2.0 Resource Server Opaque Token) for stateless authentication.
 - **Object Mapping**: Project Lombok to reduce boilerplate code.

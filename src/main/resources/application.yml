@@ -46,13 +46,13 @@ spring:
         base-url: ${ESCRUTA_AI_EMBEDDING_BASE_URL:${ESCRUTA_AI_BASE_URL}}
         api-key: ${ESCRUTA_AI_EMBEDDING_API_KEY:${ESCRUTA_AI_API_KEY}}
     vectorstore:
-      pgvector:
+      qdrant:
         initialize-schema: true
-        index-type: hnsw
-        distance-type: cosine_distance
-        dimensions: ${ESCRUTA_AI_EMBEDDING_DIMENSIONS:768}
-        remove-existing-vector-store-table: false
-        max-document-batch-size: 1000
+        host: ${ESCRUTA_QDRANT_HOST:localhost}
+        port: ${ESCRUTA_QDRANT_PORT:6334}
+        api-key: ${ESCRUTA_QDRANT_API_KEY:}
+        collection-name: ${ESCRUTA_QDRANT_COLLECTION:escruta}
+        use-tls: ${ESCRUTA_QDRANT_USE_TLS:false}
     retry:
       exclude-on-http-codes: 429
 logging:
