@@ -1,4 +1,11 @@
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.vectorstore.qdrant.autoconfigure.QdrantVectorStoreAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
+  main:
+    allow-bean-definition-overriding: true
   datasource:
     url: jdbc:postgresql://localhost:5432/escruta_test
     username: postgres
@@ -10,9 +17,24 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
   ai:
+    openai:
+      base-url: "http://localhost:8080"
+      api-key: "dummy-api-key"
+      chat:
+        options:
+          model: "dummy-model"
+      embedding:
+        options:
+          model: "dummy-embedding-model"
+          dimensions: 768
+        base-url: "http://localhost:8080"
+        api-key: "dummy-api-key"
     vectorstore:
-      pgvector:
-        initialize-schema: true
+      qdrant:
+        host: ${ESCRUTA_QDRANT_HOST:localhost}
+        port: ${ESCRUTA_QDRANT_PORT:6334}
+        collection-name: escruta_test
+        initialize-schema: false
 
 logging:
   level:
