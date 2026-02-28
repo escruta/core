@@ -165,10 +165,6 @@ public class SourceService {
                 if (updatedSource.getTitle().equals(finalLink)) {
                     updatedSource.setTitle(webContent.title());
                 }
-                updatedSource.setContent(content);
-                updatedSource.setStatus(com.escruta.core.entities.enums.SourceStatus.READY);
-                sourceRepository.save(updatedSource);
-
                 asyncVectorIndexingService.indexSourceInVectorStore(
                         notebookId,
                         finalSourceId,
@@ -176,6 +172,10 @@ public class SourceService {
                         finalLink,
                         content
                 );
+
+                updatedSource.setContent(content);
+                updatedSource.setStatus(com.escruta.core.entities.enums.SourceStatus.READY);
+                sourceRepository.save(updatedSource);
             } catch (Exception e) {
                 sourceRepository.findById(finalSourceId).ifPresent(s -> {
                     s.setStatus(com.escruta.core.entities.enums.SourceStatus.FAILED);
@@ -262,10 +262,6 @@ public class SourceService {
                     }
 
                     Source updatedSource = sourceRepository.findById(finalSourceId).orElseThrow();
-                    updatedSource.setContent(content);
-                    updatedSource.setStatus(com.escruta.core.entities.enums.SourceStatus.READY);
-                    sourceRepository.save(updatedSource);
-
                     asyncVectorIndexingService.indexSourceInVectorStore(
                             notebookId,
                             finalSourceId,
@@ -273,6 +269,10 @@ public class SourceService {
                             updatedSource.getLink(),
                             content
                     );
+
+                    updatedSource.setContent(content);
+                    updatedSource.setStatus(com.escruta.core.entities.enums.SourceStatus.READY);
+                    sourceRepository.save(updatedSource);
                 } catch (Exception e) {
                     sourceRepository.findById(finalSourceId).ifPresent(s -> {
                         s.setStatus(com.escruta.core.entities.enums.SourceStatus.FAILED);

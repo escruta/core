@@ -67,7 +67,15 @@ class ChatController {
 
         var documents = retrievalService.getDocumentsForNotebook(notebookId, documentLimit);
         if (documents.isEmpty()) {
-            return Optional.empty();
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            documents = retrievalService.getDocumentsForNotebook(notebookId, documentLimit);
+            if (documents.isEmpty()) {
+                return Optional.empty();
+            }
         }
 
         String context = documents
