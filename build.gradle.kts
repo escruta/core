@@ -8,7 +8,6 @@ plugins {
 val springAiVersion by extra("1.1.2")
 
 group = "com.escruta"
-version = "0.0.1"
 
 java {
     toolchain {
