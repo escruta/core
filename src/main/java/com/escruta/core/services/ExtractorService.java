@@ -4,6 +4,7 @@ import com.escruta.core.dtos.ExtractorResponse;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -11,7 +12,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.net.http.HttpClient;
 import java.util.Set;
@@ -37,8 +37,13 @@ public class ExtractorService {
                 .build();
     }
 
-    public ExtractorResponse extractMarkdown(MultipartFile file) {
-        var resource = file.getResource();
+    public ExtractorResponse extractMarkdown(byte[] fileBytes, String filename) {
+        var resource = new ByteArrayResource(fileBytes) {
+            @Override
+            public String getFilename() {
+                return filename;
+            }
+        };
         var body = new LinkedMultiValueMap<String, Object>();
         body.add("file", resource);
         return fetchContent(body);

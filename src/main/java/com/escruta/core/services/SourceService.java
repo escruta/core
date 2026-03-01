@@ -18,6 +18,8 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 import lombok.RequiredArgsConstructor;
 
@@ -67,27 +69,32 @@ public class SourceService {
         source = sourceRepository.save(source);
 
         final UUID finalSourceId = source.getId();
-        CompletableFuture.runAsync(() -> {
-            try {
-                var response = extractorService.extractMarkdown(newSourceDto.link());
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        var response = extractorService.extractMarkdown(newSourceDto.link());
 
-                Source updatedSource = sourceRepository.findById(finalSourceId).orElseThrow();
-                asyncVectorIndexingService.indexSourceInVectorStore(
-                        notebookId,
-                        finalSourceId,
-                        response.title(),
-                        newSourceDto.link(),
-                        response.content()
-                );
+                        Source updatedSource = sourceRepository.findById(finalSourceId).orElseThrow();
+                        asyncVectorIndexingService.indexSourceInVectorStore(
+                                notebookId,
+                                finalSourceId,
+                                response.title(),
+                                newSourceDto.link(),
+                                response.content()
+                        );
 
-                updatedSource.setTitle(response.title());
-                updatedSource.setContent(response.content());
-                updatedSource.setStatus(SourceStatus.READY);
-                sourceRepository.save(updatedSource);
-            } catch (Exception e) {
-                sourceRepository.findById(finalSourceId).ifPresent(s -> {
-                    s.setStatus(SourceStatus.FAILED);
-                    sourceRepository.save(s);
+                        updatedSource.setTitle(response.title());
+                        updatedSource.setContent(response.content());
+                        updatedSource.setStatus(SourceStatus.READY);
+                        sourceRepository.save(updatedSource);
+                    } catch (Exception e) {
+                        sourceRepository.findById(finalSourceId).ifPresent(s -> {
+                            s.setStatus(SourceStatus.FAILED);
+                            sourceRepository.save(s);
+                        });
+                    }
                 });
             }
         });
@@ -147,35 +154,44 @@ public class SourceService {
         source = sourceRepository.save(source);
 
         final UUID finalSourceId = source.getId();
-
+        final byte[] fileBytes;
+        final String filename;
         try {
-            CompletableFuture.runAsync(() -> {
-                try {
-                    var response = extractorService.extractMarkdown(file);
-
-                    Source updatedSource = sourceRepository.findById(finalSourceId).orElseThrow();
-                    asyncVectorIndexingService.indexSourceInVectorStore(
-                            notebookId,
-                            finalSourceId,
-                            updatedSource.getTitle(),
-                            updatedSource.getLink(),
-                            response.content()
-                    );
-
-                    updatedSource.setTitle(response.title());
-                    updatedSource.setContent(response.content());
-                    updatedSource.setStatus(SourceStatus.READY);
-                    sourceRepository.save(updatedSource);
-                } catch (Exception e) {
-                    sourceRepository.findById(finalSourceId).ifPresent(s -> {
-                        s.setStatus(SourceStatus.FAILED);
-                        sourceRepository.save(s);
-                    });
-                }
-            });
+            fileBytes = file.getBytes();
+            filename = file.getOriginalFilename();
         } catch (Exception e) {
             throw new RuntimeException("Failed to read file bytes: " + e.getMessage(), e);
         }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        var response = extractorService.extractMarkdown(fileBytes, filename);
+
+                        Source updatedSource = sourceRepository.findById(finalSourceId).orElseThrow();
+                        asyncVectorIndexingService.indexSourceInVectorStore(
+                                notebookId,
+                                finalSourceId,
+                                updatedSource.getTitle(),
+                                updatedSource.getLink(),
+                                response.content()
+                        );
+
+                        updatedSource.setTitle(response.title());
+                        updatedSource.setContent(response.content());
+                        updatedSource.setStatus(SourceStatus.READY);
+                        sourceRepository.save(updatedSource);
+                    } catch (Exception e) {
+                        sourceRepository.findById(finalSourceId).ifPresent(s -> {
+                            s.setStatus(SourceStatus.FAILED);
+                            sourceRepository.save(s);
+                        });
+                    }
+                });
+            }
+        });
 
         return new SourceWithContentDTO(source);
     }
