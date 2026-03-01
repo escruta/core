@@ -9,24 +9,20 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class SourceMapper {
-    public Source toSource(SourceCreationDTO dto, Notebook notebook, String content, boolean isGeneratedByAi) {
+    public Source toSource(SourceCreationDTO dto, Notebook notebook, String content) {
         Source source = new Source();
         source.setNotebook(notebook);
-        source.setIcon(dto.icon());
-        source.setTitle(dto.title());
         source.setLink(dto.link());
         source.setContent(content);
-        source.setConvertedByAi(isGeneratedByAi);
         return source;
     }
 
-    public Source toSource(SourceFileCreationDTO dto, Notebook notebook, String content, boolean isGeneratedByAi) {
+    public Source toSource(SourceFileCreationDTO dto, Notebook notebook, String content) {
         Source source = new Source();
         source.setNotebook(notebook);
         source.setIcon(dto.icon());
         source.setTitle(dto.title());
         source.setContent(content);
-        source.setConvertedByAi(isGeneratedByAi);
         return source;
     }
 

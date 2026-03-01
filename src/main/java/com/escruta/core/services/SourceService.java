@@ -7,12 +7,11 @@ import com.escruta.core.dtos.source.SourceUpdateDTO;
 import com.escruta.core.dtos.source.SourceWithContentDTO;
 import com.escruta.core.entities.Notebook;
 import com.escruta.core.entities.Source;
+import com.escruta.core.entities.enums.SourceStatus;
 import com.escruta.core.mappers.SourceMapper;
 import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.repositories.SourceRepository;
-import io.github.furstenheim.CopyDown;
 import jakarta.persistence.EntityNotFoundException;
-import org.jsoup.Jsoup;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -22,10 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import lombok.RequiredArgsConstructor;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -35,91 +34,11 @@ public class SourceService {
     private final SourceMapper sourceMapper;
     private final RetrievalService retrievalService;
     private final ChatModel chatModel;
-    private final FileTextExtractionService fileTextExtractionService;
+    private final ExtractorService extractorService;
     private final AsyncVectorIndexingService asyncVectorIndexingService;
 
-    private record WebContent(
-            String title,
-            String content,
-            String html
-    ) {
-    }
-
-    private WebContent fetchWebContent(String url) {
-        try {
-            var doc = Jsoup.connect(url).get();
-            String title = doc.title();
-
-            if (title.trim().isEmpty()) {
-                title = doc.select("meta[property=og:title]").attr("content");
-            }
-            if (title.trim().isEmpty()) {
-                title = generateDefaultTitle(url);
-            }
-
-            var mainElement = extractMainElement(doc);
-            String textContent = mainElement.text();
-            String htmlContent = mainElement.html();
-
-            return new WebContent(title.trim(), textContent, htmlContent);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to fetch content from URL: " + url, e);
-        }
-    }
-
-    private org.jsoup.nodes.Element extractMainElement(org.jsoup.nodes.Document doc) {
-        doc
-                .select("nav, header, footer, aside, .sidebar, .menu, .navigation, " + ".advertisement, .ads, .ad, script, style, noscript, " + ".footer, .header, .nav, #nav, #header, #footer, #sidebar, " + ".social, .share, .comments, .related, .recommended")
-                .remove();
-
-        String[] mainSelectors = {"article", "main", "[role=main]", ".post-content", ".article-content", ".entry-content", ".content", "#content", "#mw-content-text", ".mw-parser-output"};
-
-        for (String selector : mainSelectors) {
-            var element = doc.selectFirst(selector);
-            if (element != null && element.text().length() > 200) {
-                return element;
-            }
-        }
-
-        return doc.body();
-    }
-
-    private String convertHtmlToMarkdown(String htmlContent) {
-        CopyDown converter = new CopyDown();
-        return converter.convert(htmlContent);
-    }
-
-    private String cleanContentWithAI(String content) {
-        String systemPrompt = """
-                Clean and improve this Markdown content.
-                
-                RULES:
-                - Remove any leftover navigation, menus, or boilerplate text
-                - Keep all the important information intact
-                - Fix formatting issues
-                - Output ONLY the cleaned Markdown, nothing else
-                """;
-
-        try {
-            UserMessage userMessage = new UserMessage(content);
-            Prompt prompt = new Prompt(List.of(new SystemMessage(systemPrompt), userMessage));
-            return chatModel.call(prompt).getResult().getOutput().getText();
-        } catch (Exception e) {
-            return content;
-        }
-    }
-
-    private String generateDefaultTitle(String url) {
-        try {
-            String domain = new java.net.URI(url).getHost();
-            return "Content from " + domain.replaceFirst("^www\\.", "");
-        } catch (Exception e) {
-            return "Untitled Web Content";
-        }
-    }
-
-    public boolean hasSources(UUID notebookId) {
-        return sourceRepository.existsByNotebookId(notebookId);
+    public boolean hasNoSources(UUID notebookId) {
+        return !sourceRepository.existsByNotebookId(notebookId);
     }
 
     public List<SourceResponseDTO> getSources(UUID notebookId) {
@@ -135,50 +54,39 @@ public class SourceService {
     }
 
     @Transactional
-    public SourceWithContentDTO addSource(UUID notebookId, SourceCreationDTO newSourceDto, boolean aiConverter) {
+    public SourceWithContentDTO addSource(UUID notebookId, SourceCreationDTO newSourceDto) {
         Optional<Notebook> notebookOptional = notebookRepository.findById(notebookId);
 
         if (notebookOptional.isEmpty()) {
             throw new EntityNotFoundException("Notebook not found");
         }
 
-        Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get(), "", aiConverter);
-        if (source.getTitle() == null || source.getTitle().trim().isEmpty()) {
-            source.setTitle(newSourceDto.link());
-        }
-        source.setStatus(com.escruta.core.entities.enums.SourceStatus.PENDING);
+        Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get(), "");
+        source.setTitle(newSourceDto.link());
+        source.setStatus(SourceStatus.PENDING);
         source = sourceRepository.save(source);
 
         final UUID finalSourceId = source.getId();
-        final String finalLink = newSourceDto.link();
-
-        java.util.concurrent.CompletableFuture.runAsync(() -> {
+        CompletableFuture.runAsync(() -> {
             try {
-                WebContent webContent = fetchWebContent(finalLink);
-                String content = convertHtmlToMarkdown(webContent.html());
-
-                if (aiConverter) {
-                    content = cleanContentWithAI(content);
-                }
+                var response = extractorService.extractMarkdown(newSourceDto.link());
 
                 Source updatedSource = sourceRepository.findById(finalSourceId).orElseThrow();
-                if (updatedSource.getTitle().equals(finalLink)) {
-                    updatedSource.setTitle(webContent.title());
-                }
                 asyncVectorIndexingService.indexSourceInVectorStore(
                         notebookId,
                         finalSourceId,
-                        updatedSource.getTitle(),
-                        finalLink,
-                        content
+                        response.title(),
+                        newSourceDto.link(),
+                        response.content()
                 );
 
-                updatedSource.setContent(content);
-                updatedSource.setStatus(com.escruta.core.entities.enums.SourceStatus.READY);
+                updatedSource.setTitle(response.title());
+                updatedSource.setContent(response.content());
+                updatedSource.setStatus(SourceStatus.READY);
                 sourceRepository.save(updatedSource);
             } catch (Exception e) {
                 sourceRepository.findById(finalSourceId).ifPresent(s -> {
-                    s.setStatus(com.escruta.core.entities.enums.SourceStatus.FAILED);
+                    s.setStatus(SourceStatus.FAILED);
                     sourceRepository.save(s);
                 });
             }
@@ -222,12 +130,11 @@ public class SourceService {
     public SourceWithContentDTO addSourceFromFile(
             UUID notebookId,
             SourceFileCreationDTO newSourceDto,
-            MultipartFile file,
-            boolean aiConverter
+            MultipartFile file
     ) {
         Optional<Notebook> notebookOptional = notebookRepository.findById(notebookId);
 
-        if (!fileTextExtractionService.isSupportedFileType(file.getContentType())) {
+        if (!extractorService.isSupportedFileType(file.getContentType())) {
             throw new RuntimeException("Unsupported file type: " + file.getContentType());
         }
 
@@ -235,31 +142,16 @@ public class SourceService {
             throw new EntityNotFoundException("Notebook not found");
         }
 
-        Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get(), "", aiConverter);
-        source.setStatus(com.escruta.core.entities.enums.SourceStatus.PENDING);
+        Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get(), "");
+        source.setStatus(SourceStatus.PENDING);
         source = sourceRepository.save(source);
 
         final UUID finalSourceId = source.getId();
-        final String fileContentType = file.getContentType();
-        final String originalFilename = file.getOriginalFilename();
 
         try {
-            final byte[] fileBytes = file.getBytes();
-
-            java.util.concurrent.CompletableFuture.runAsync(() -> {
+            CompletableFuture.runAsync(() -> {
                 try {
-                    String content = fileTextExtractionService.extractTextFromFile(
-                            fileBytes,
-                            originalFilename,
-                            fileContentType
-                    );
-                    if (content == null || content.trim().isEmpty()) {
-                        throw new RuntimeException("No text content could be extracted from the file");
-                    }
-
-                    if (aiConverter) {
-                        content = cleanContentWithAI(content);
-                    }
+                    var response = extractorService.extractMarkdown(file);
 
                     Source updatedSource = sourceRepository.findById(finalSourceId).orElseThrow();
                     asyncVectorIndexingService.indexSourceInVectorStore(
@@ -267,15 +159,16 @@ public class SourceService {
                             finalSourceId,
                             updatedSource.getTitle(),
                             updatedSource.getLink(),
-                            content
+                            response.content()
                     );
 
-                    updatedSource.setContent(content);
-                    updatedSource.setStatus(com.escruta.core.entities.enums.SourceStatus.READY);
+                    updatedSource.setTitle(response.title());
+                    updatedSource.setContent(response.content());
+                    updatedSource.setStatus(SourceStatus.READY);
                     sourceRepository.save(updatedSource);
                 } catch (Exception e) {
                     sourceRepository.findById(finalSourceId).ifPresent(s -> {
-                        s.setStatus(com.escruta.core.entities.enums.SourceStatus.FAILED);
+                        s.setStatus(SourceStatus.FAILED);
                         sourceRepository.save(s);
                     });
                 }

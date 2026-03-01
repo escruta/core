@@ -43,10 +43,10 @@ public class SourceController {
     @PostMapping
     public ResponseEntity<SourceWithContentDTO> createNotebookSource(
             @PathVariable UUID notebookId,
-            @Valid @RequestBody SourceCreationDTO sourceCreationDTO,
-            @RequestParam(name = "aiConverter", defaultValue = "false") boolean aiConverter
+            @Valid @RequestBody
+            SourceCreationDTO sourceCreationDTO
     ) {
-        var source = sourceService.addSource(notebookId, sourceCreationDTO, aiConverter);
+        var source = sourceService.addSource(notebookId, sourceCreationDTO);
         return source != null ?
                 ResponseEntity.status(HttpStatus.CREATED).body(source) :
                 ResponseEntity.badRequest().build();
@@ -57,8 +57,7 @@ public class SourceController {
             @PathVariable UUID notebookId,
             @RequestParam("file") MultipartFile file,
             @RequestParam("title") String title,
-            @RequestParam(name = "icon", required = false) String icon,
-            @RequestParam(name = "aiConverter", defaultValue = "false") boolean aiConverter
+            @RequestParam(name = "icon", required = false) String icon
     ) {
         if (file.isEmpty()) {
             throw new IllegalArgumentException("File cannot be empty");
@@ -68,7 +67,7 @@ public class SourceController {
         }
         var sourceFileCreationDTO = new SourceFileCreationDTO(icon, title.trim());
 
-        var source = sourceService.addSourceFromFile(notebookId, sourceFileCreationDTO, file, aiConverter);
+        var source = sourceService.addSourceFromFile(notebookId, sourceFileCreationDTO, file);
         return source != null ?
                 ResponseEntity.status(HttpStatus.CREATED).body(source) :
                 ResponseEntity.badRequest().build();

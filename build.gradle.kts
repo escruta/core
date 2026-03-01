@@ -24,8 +24,6 @@ configurations.all {
 }
 
 dependencies {
-    implementation("org.jsoup:jsoup:1.20.1")
-    implementation("io.github.furstenheim:copy_down:1.1")
     implementation("org.springframework.boot:spring-boot-starter")
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-security")
@@ -33,8 +31,6 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.ai:spring-ai-starter-model-openai")
     implementation("org.springframework.ai:spring-ai-starter-vector-store-qdrant")
-    implementation("org.springframework.ai:spring-ai-tika-document-reader")
-    implementation("org.springframework.ai:spring-ai-pdf-document-reader")
     implementation("org.springframework.ai:spring-ai-advisors-vector-store")
     implementation("org.springframework.ai:spring-ai-starter-model-chat-memory-repository-jdbc")
     implementation("jakarta.activation:jakarta.activation-api:2.1.4")

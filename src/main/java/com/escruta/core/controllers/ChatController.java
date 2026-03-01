@@ -61,7 +61,7 @@ class ChatController {
     private final JdbcChatMemoryRepository chatMemoryRepository;
 
     private Optional<String> getNotebookContext(UUID notebookId, int documentLimit) {
-        if (!sourceService.hasSources(notebookId)) {
+        if (sourceService.hasNoSources(notebookId)) {
             return Optional.empty();
         }
 

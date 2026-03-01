@@ -50,7 +50,7 @@ spring:
         initialize-schema: true
         host: ${ESCRUTA_QDRANT_HOST:localhost}
         port: ${ESCRUTA_QDRANT_PORT:6334}
-        api-key: ${ESCRUTA_QDRANT_API_KEY:}
+        api-key: ${ESCRUTA_QDRANT_API_KEY}
         collection-name: ${ESCRUTA_QDRANT_COLLECTION:escruta}
         use-tls: ${ESCRUTA_QDRANT_USE_TLS:false}
     retry:
@@ -66,3 +66,7 @@ security:
     allowedMethods: GET,POST,PUT,DELETE,OPTIONS
     allowedHeaders: Authorization,Content-Type
     allowCredentials: true
+services:
+  extractor:
+    base-url: ${ESCRUTA_EXTRACTOR_URL:http://localhost:8000}
+    api-key: ${ESCRUTA_EXTRACTOR_API_KEY}

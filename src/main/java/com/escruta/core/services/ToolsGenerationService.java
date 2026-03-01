@@ -101,7 +101,7 @@ public class ToolsGenerationService {
     private String generateContent(GenerationJob job) throws Exception {
         UUID notebookId = job.getNotebook().getId();
 
-        if (!sourceService.hasSources(notebookId)) {
+        if (sourceService.hasNoSources(notebookId)) {
             throw new IllegalStateException("No sources available in this notebook");
         }
 

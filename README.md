@@ -5,10 +5,6 @@ _"Think, ask, learn"_
 **Escruta Core** is the core engine of the Escruta research assistant platform. Built with Java and Spring Boot, it
 handles the business logic, document processing, AI orchestration, and persistent storage for your research data.
 
-> [!IMPORTANT]
-> This backend service is a central part of the Escruta ecosystem. It requires a PostgreSQL database for relational
-> data, a Qdrant database for vector search, and access to an OpenAI-compatible API to function correctly.
-
 ## Getting Started
 
 ### Prerequisites
@@ -17,6 +13,7 @@ handles the business logic, document processing, AI orchestration, and persisten
 - PostgreSQL (version 16 or higher).
 - Qdrant (for vector search).
 - An OpenAI-compatible API.
+- Escruta Extractor service running (see [Escruta Extractor](https://github.com/escruta/extractor)).
 
 > [!TIP]
 > You can use Docker to quickly spin up both PostgreSQL and Qdrant:
@@ -58,6 +55,8 @@ application at runtime.
 | `ESCRUTA_QDRANT_API_KEY`           | API Key for Qdrant (if required)     |                                            |
 | `ESCRUTA_QDRANT_COLLECTION`        | Qdrant collection name               | `escruta`                                  |
 | `ESCRUTA_CORS_ALLOWED_ORIGINS`     | Allowed origins for CORS             | `http://localhost:5173`                    |
+| `ESCRUTA_EXTRACTOR_URL`            | Extractor service URL                | `http://localhost:8000`                    |
+| `ESCRUTA_EXTRACTOR_API_KEY`        | Internal API Key for the Extractor   | (Required)                                 |
 
 See [application.yml](./src/main/resources/application.yml) for the full list of configuration options.
 
