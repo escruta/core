@@ -2,6 +2,7 @@ package com.escruta.core.dtos.source;
 
 import com.escruta.core.entities.Source;
 import com.escruta.core.entities.enums.SourceStatus;
+import com.escruta.core.entities.enums.SourceType;
 
 import java.sql.Timestamp;
 import java.util.UUID;
@@ -14,6 +15,7 @@ public record SourceResponseDTO(
         boolean isConvertedByAi,
         String link,
         SourceStatus status,
+        SourceType type,
         Timestamp createdAt,
         Timestamp updatedAt
 ) {
@@ -26,6 +28,7 @@ public record SourceResponseDTO(
                 source.isConvertedByAi(),
                 source.getLink(),
                 source.getStatus(),
+                source.getType(),
                 source.getCreatedAt(),
                 source.getUpdatedAt()
         );

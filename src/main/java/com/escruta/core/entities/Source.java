@@ -1,6 +1,7 @@
 package com.escruta.core.entities;
 
 import com.escruta.core.entities.enums.SourceStatus;
+import com.escruta.core.entities.enums.SourceType;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -42,6 +43,10 @@ public class Source {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private SourceStatus status = SourceStatus.PENDING;
+
+    @Enumerated(EnumType.STRING)
+    @Column()
+    private SourceType type;
 
     @Column()
     private String link;

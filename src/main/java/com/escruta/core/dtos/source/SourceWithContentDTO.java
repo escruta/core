@@ -2,6 +2,7 @@ package com.escruta.core.dtos.source;
 
 import com.escruta.core.entities.Source;
 import com.escruta.core.entities.enums.SourceStatus;
+import com.escruta.core.entities.enums.SourceType;
 
 import java.sql.Timestamp;
 import java.util.UUID;
@@ -16,6 +17,7 @@ public record SourceWithContentDTO(
         String summary,
         String link,
         SourceStatus status,
+        SourceType type,
         Timestamp createdAt,
         Timestamp updatedAt
 ) {
@@ -30,6 +32,7 @@ public record SourceWithContentDTO(
                 source.getSummary(),
                 source.getLink(),
                 source.getStatus(),
+                source.getType(),
                 source.getCreatedAt(),
                 source.getUpdatedAt()
         );

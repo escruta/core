@@ -3,6 +3,7 @@ package com.escruta.core.controllers;
 import com.escruta.core.dtos.source.SourceCreationDTO;
 import com.escruta.core.dtos.source.SourceFileCreationDTO;
 import com.escruta.core.dtos.source.SourceResponseDTO;
+import com.escruta.core.dtos.source.SourceTextCreationDTO;
 import com.escruta.core.dtos.source.SourceUpdateDTO;
 import com.escruta.core.dtos.source.SourceWithContentDTO;
 import com.escruta.core.services.SourceService;
@@ -68,6 +69,18 @@ public class SourceController {
         var sourceFileCreationDTO = new SourceFileCreationDTO(icon, title.trim());
 
         var source = sourceService.addSourceFromFile(notebookId, sourceFileCreationDTO, file);
+        return source != null ?
+                ResponseEntity.status(HttpStatus.CREATED).body(source) :
+                ResponseEntity.badRequest().build();
+    }
+
+    @PostMapping("/text")
+    public ResponseEntity<SourceWithContentDTO> createNotebookSourceFromText(
+            @PathVariable UUID notebookId,
+            @Valid @RequestBody
+            SourceTextCreationDTO sourceTextCreationDTO
+    ) {
+        var source = sourceService.addSourceFromText(notebookId, sourceTextCreationDTO);
         return source != null ?
                 ResponseEntity.status(HttpStatus.CREATED).body(source) :
                 ResponseEntity.badRequest().build();

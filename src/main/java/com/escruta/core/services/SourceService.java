@@ -3,6 +3,7 @@ package com.escruta.core.services;
 import com.escruta.core.dtos.source.SourceCreationDTO;
 import com.escruta.core.dtos.source.SourceFileCreationDTO;
 import com.escruta.core.dtos.source.SourceResponseDTO;
+import com.escruta.core.dtos.source.SourceTextCreationDTO;
 import com.escruta.core.dtos.source.SourceUpdateDTO;
 import com.escruta.core.dtos.source.SourceWithContentDTO;
 import com.escruta.core.entities.Notebook;
@@ -181,6 +182,49 @@ public class SourceService {
 
                         updatedSource.setTitle(response.title());
                         updatedSource.setContent(response.content());
+                        updatedSource.setStatus(SourceStatus.READY);
+                        sourceRepository.save(updatedSource);
+                    } catch (Exception e) {
+                        sourceRepository.findById(finalSourceId).ifPresent(s -> {
+                            s.setStatus(SourceStatus.FAILED);
+                            sourceRepository.save(s);
+                        });
+                    }
+                });
+            }
+        });
+
+        return new SourceWithContentDTO(source);
+    }
+
+    @Transactional
+    public SourceWithContentDTO addSourceFromText(UUID notebookId, SourceTextCreationDTO newSourceDto) {
+        Optional<Notebook> notebookOptional = notebookRepository.findById(notebookId);
+
+        if (notebookOptional.isEmpty()) {
+            throw new EntityNotFoundException("Notebook not found");
+        }
+
+        Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get());
+        source.setStatus(SourceStatus.PENDING);
+        source = sourceRepository.save(source);
+
+        final UUID finalSourceId = source.getId();
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        Source updatedSource = sourceRepository.findById(finalSourceId).orElseThrow();
+                        asyncVectorIndexingService.indexSourceInVectorStore(
+                                notebookId,
+                                finalSourceId,
+                                updatedSource.getTitle(),
+                                null,
+                                updatedSource.getContent()
+                        );
+
                         updatedSource.setStatus(SourceStatus.READY);
                         sourceRepository.save(updatedSource);
                     } catch (Exception e) {
