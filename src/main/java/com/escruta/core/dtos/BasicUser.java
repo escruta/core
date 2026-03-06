@@ -14,7 +14,7 @@ import java.util.UUID;
 public class BasicUser {
     public BasicUser(User user) {
         this.id = user.getId();
-        this.fullName = user.getFullName();
+        this.name = user.getName();
         this.email = user.getEmail();
         this.createdAt = user.getCreatedAt();
         this.updatedAt = user.getUpdatedAt();
@@ -24,7 +24,7 @@ public class BasicUser {
     private UUID id;
 
     @NotEmpty
-    private String fullName;
+    private String name;
 
     private String email;
     private Timestamp createdAt;

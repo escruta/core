@@ -16,12 +16,12 @@ public class UserController {
 
     @GetMapping("/me")
     public ResponseEntity<BasicUser> getMe() {
-        return ResponseEntity.ok(new BasicUser(userService.getCurrentFullUser()));
+        return ResponseEntity.ok(new BasicUser(userService.getCurrentUser()));
     }
 
     @PostMapping("/change-name")
-    public ResponseEntity<?> changeName(@RequestParam String newFullName) {
-        userService.changeName(newFullName);
+    public ResponseEntity<?> changeName(@RequestParam String newName) {
+        userService.changeName(newName);
         return ResponseEntity.ok().build();
     }
 

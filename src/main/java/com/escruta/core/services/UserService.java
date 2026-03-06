@@ -25,13 +25,13 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
 
     public UUID getUserId() {
-        var user = getCurrentFullUser();
+        var user = getCurrentUser();
         return (user != null) ?
                 user.getId() :
                 null;
     }
 
-    public User getCurrentFullUser() {
+    public User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -52,23 +52,23 @@ public class UserService {
         }
 
         var user = new User();
-        user.setFullName(input.getFullName());
+        user.setName(input.getName());
         user.setEmail(input.getEmail());
         user.setPassword(passwordEncoder.encode(input.getPassword()));
         return userRepository.save(user);
     }
 
     public void changeName(String newName) {
-        User currentUser = getCurrentFullUser();
+        User currentUser = getCurrentUser();
         if (currentUser == null) {
             throw new BadCredentialsException("User not authenticated");
         }
-        currentUser.setFullName(newName);
+        currentUser.setName(newName);
         userRepository.save(currentUser);
     }
 
     public void changePassword(ChangePasswordDto changePasswordDto) {
-        User currentUser = getCurrentFullUser();
+        User currentUser = getCurrentUser();
         if (currentUser == null) {
             throw new BadCredentialsException("User not authenticated");
         }
@@ -81,7 +81,7 @@ public class UserService {
 
     @Transactional
     public void deleteAccount() {
-        User currentUser = getCurrentFullUser();
+        User currentUser = getCurrentUser();
         if (currentUser == null) {
             throw new BadCredentialsException("User not authenticated");
         }

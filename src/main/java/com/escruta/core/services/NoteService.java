@@ -37,7 +37,7 @@ public class NoteService {
     }
 
     public NoteResponseDTO addNote(UUID notebookId, NoteCreationDTO newNoteDto) {
-        var currentUser = userService.getCurrentFullUser();
+        var currentUser = userService.getCurrentUser();
         Optional<Notebook> notebookOptional = notebookRepository.findById(notebookId);
         if (notebookOptional.isPresent() && currentUser != null) {
             Note note = noteMapper.toNote(newNoteDto, notebookOptional.get());

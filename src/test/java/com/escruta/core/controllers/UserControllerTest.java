@@ -42,22 +42,22 @@ class UserControllerTest {
         User user = new User();
         user.setId(UUID.randomUUID());
         user.setEmail("test@example.com");
-        user.setFullName("Test User");
+        user.setName("Test User");
 
-        when(userService.getCurrentFullUser()).thenReturn(user);
+        when(userService.getCurrentUser()).thenReturn(user);
 
         mockMvc
                 .perform(get("/users/me"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("test@example.com"))
-                .andExpect(jsonPath("$.fullName").value("Test User"));
+                .andExpect(jsonPath("$.name").value("Test User"));
     }
 
     @Test
     @WithMockUser
     @DisplayName("Should change name successfully when authenticated")
     void changeName_shouldChangeNameWhenAuthenticated() throws Exception {
-        mockMvc.perform(post("/users/change-name").param("newFullName", "New Name")).andExpect(status().isOk());
+        mockMvc.perform(post("/users/change-name").param("newName", "New Name")).andExpect(status().isOk());
 
         verify(userService).changeName("New Name");
     }

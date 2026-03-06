@@ -116,7 +116,7 @@ class NotebookServiceTest {
         NotebookCreationDTO dto = new NotebookCreationDTO("📓", "New Notebook");
         Notebook notebook = createNotebook(NOTEBOOK_ID, "New Notebook", user);
 
-        when(userService.getCurrentFullUser()).thenReturn(user);
+        when(userService.getCurrentUser()).thenReturn(user);
         when(notebookMapper.toNotebook(dto, user)).thenReturn(notebook);
         when(notebookRepository.save(notebook)).thenReturn(notebook);
 
@@ -132,7 +132,7 @@ class NotebookServiceTest {
     void createNotebook_shouldReturnNullWhenUserNotAuthenticated() {
         NotebookCreationDTO dto = new NotebookCreationDTO("📓", "New Notebook");
 
-        when(userService.getCurrentFullUser()).thenReturn(null);
+        when(userService.getCurrentUser()).thenReturn(null);
 
         NotebookResponseDTO result = notebookService.createNotebook(dto);
 
@@ -241,7 +241,7 @@ class NotebookServiceTest {
         User user = new User();
         user.setId(USER_ID);
         user.setEmail("test@example.com");
-        user.setFullName("Test User");
+        user.setName("Test User");
         return user;
     }
 }

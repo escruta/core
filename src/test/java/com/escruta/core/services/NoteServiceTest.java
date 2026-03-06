@@ -121,7 +121,7 @@ class NoteServiceTest {
         User user = createUser();
         Note note = createNote(NOTE_ID, "New Note", "New Content", notebook);
 
-        when(userService.getCurrentFullUser()).thenReturn(user);
+        when(userService.getCurrentUser()).thenReturn(user);
         when(notebookRepository.findById(NOTEBOOK_ID)).thenReturn(Optional.of(notebook));
         when(noteMapper.toNote(dto, notebook)).thenReturn(note);
         when(noteRepository.save(note)).thenReturn(note);
@@ -139,7 +139,7 @@ class NoteServiceTest {
         NoteCreationDTO dto = new NoteCreationDTO("📄", "New Note", "New Content");
         User user = createUser();
 
-        when(userService.getCurrentFullUser()).thenReturn(user);
+        when(userService.getCurrentUser()).thenReturn(user);
         when(notebookRepository.findById(NOTEBOOK_ID)).thenReturn(Optional.empty());
 
         NoteResponseDTO result = noteService.addNote(NOTEBOOK_ID, dto);
@@ -154,7 +154,7 @@ class NoteServiceTest {
         NoteCreationDTO dto = new NoteCreationDTO("📄", "New Note", "New Content");
         Notebook notebook = createNotebook();
 
-        when(userService.getCurrentFullUser()).thenReturn(null);
+        when(userService.getCurrentUser()).thenReturn(null);
         when(notebookRepository.findById(NOTEBOOK_ID)).thenReturn(Optional.of(notebook));
 
         NoteResponseDTO result = noteService.addNote(NOTEBOOK_ID, dto);
@@ -266,7 +266,7 @@ class NoteServiceTest {
         User user = new User();
         user.setId(USER_ID);
         user.setEmail("test@example.com");
-        user.setFullName("Test User");
+        user.setName("Test User");
         return user;
     }
 }

@@ -41,7 +41,7 @@ public class NotebookService {
     }
 
     public NotebookResponseDTO createNotebook(NotebookCreationDTO createNotebookDto) {
-        var currentUser = userService.getCurrentFullUser();
+        var currentUser = userService.getCurrentUser();
         if (currentUser != null) {
             Notebook notebook = notebookMapper.toNotebook(createNotebookDto, currentUser);
             notebookRepository.save(notebook);

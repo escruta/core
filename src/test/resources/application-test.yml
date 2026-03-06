@@ -36,6 +36,20 @@ spring:
         collection-name: escruta_test
         initialize-schema: false
 
+security:
+  session:
+    expiration-interval-seconds: 3600
+  cors:
+    allowedOrigins: "http://localhost:5173"
+    allowedMethods: GET,POST,PUT,DELETE,OPTIONS
+    allowedHeaders: Authorization,Content-Type
+    allowCredentials: true
+
+services:
+  extractor:
+    base-url: "http://localhost:8000"
+    api-key: "dummy-api-key"
+
 logging:
   level:
     org.springframework.security: DEBUG

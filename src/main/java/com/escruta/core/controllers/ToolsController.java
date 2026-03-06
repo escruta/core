@@ -28,7 +28,7 @@ public class ToolsController {
             @PathVariable UUID notebookId,
             @Valid @RequestBody GenerationRequest request
     ) {
-        User user = userService.getCurrentFullUser();
+        User user = userService.getCurrentUser();
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not authenticated");
         }
@@ -51,7 +51,7 @@ public class ToolsController {
 
     @GetMapping("jobs/{jobId}")
     public ResponseEntity<?> getJobStatus(@PathVariable UUID notebookId, @PathVariable UUID jobId) {
-        User user = userService.getCurrentFullUser();
+        User user = userService.getCurrentUser();
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not authenticated");
         }
@@ -64,7 +64,7 @@ public class ToolsController {
 
     @GetMapping("jobs")
     public ResponseEntity<?> getAllJobs(@PathVariable UUID notebookId) {
-        User user = userService.getCurrentFullUser();
+        User user = userService.getCurrentUser();
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not authenticated");
         }
@@ -80,7 +80,7 @@ public class ToolsController {
 
     @GetMapping("jobs/latest/{type}")
     public ResponseEntity<?> getLatestJob(@PathVariable UUID notebookId, @PathVariable GenerationJob.JobType type) {
-        User user = userService.getCurrentFullUser();
+        User user = userService.getCurrentUser();
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not authenticated");
         }

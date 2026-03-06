@@ -54,7 +54,7 @@ class UserServiceTest {
 
     private static final String TEST_EMAIL = "test@example.com";
     private static final String TEST_PASSWORD = "Password123";
-    private static final String TEST_FULL_NAME = "Test User";
+    private static final String TEST_NAME = "Test User";
 
     @BeforeEach
     void setUp() {
@@ -106,7 +106,7 @@ class UserServiceTest {
 
     @Test
     @DisplayName("Should return user when authenticated")
-    void getCurrentFullUser_shouldReturnUserWhenAuthenticated() {
+    void getCurrentUser_shouldReturnUserWhenAuthenticated() {
         UUID userId = UUID.randomUUID();
         User user = createTestUser(userId);
 
@@ -116,7 +116,7 @@ class UserServiceTest {
         when(principal.getAttribute("sub")).thenReturn(TEST_EMAIL);
         when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(user));
 
-        User result = userService.getCurrentFullUser();
+        User result = userService.getCurrentUser();
 
         assertThat(result).isNotNull();
         assertThat(result.getId()).isEqualTo(userId);
@@ -129,7 +129,7 @@ class UserServiceTest {
         RegisterUserDto dto = new RegisterUserDto();
         dto.setEmail(TEST_EMAIL);
         dto.setPassword(TEST_PASSWORD);
-        dto.setFullName(TEST_FULL_NAME);
+        dto.setName(TEST_NAME);
 
         when(userRepository.existsByEmail(TEST_EMAIL)).thenReturn(false);
         when(passwordEncoder.encode(TEST_PASSWORD)).thenReturn("encodedPassword");
@@ -143,7 +143,7 @@ class UserServiceTest {
 
         assertThat(result).isNotNull();
         assertThat(result.getEmail()).isEqualTo(TEST_EMAIL);
-        assertThat(result.getFullName()).isEqualTo(TEST_FULL_NAME);
+        assertThat(result.getName()).isEqualTo(TEST_NAME);
         assertThat(result.getPassword()).isEqualTo("encodedPassword");
 
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
@@ -157,7 +157,7 @@ class UserServiceTest {
         RegisterUserDto dto = new RegisterUserDto();
         dto.setEmail(TEST_EMAIL);
         dto.setPassword(TEST_PASSWORD);
-        dto.setFullName(TEST_FULL_NAME);
+        dto.setName(TEST_NAME);
 
         when(userRepository.existsByEmail(TEST_EMAIL)).thenReturn(true);
 
@@ -183,7 +183,7 @@ class UserServiceTest {
 
         userService.changeName(newName);
 
-        assertThat(user.getFullName()).isEqualTo(newName);
+        assertThat(user.getName()).isEqualTo(newName);
         verify(userRepository).save(user);
     }
 
@@ -284,7 +284,7 @@ class UserServiceTest {
         User user = new User();
         user.setId(id);
         user.setEmail(TEST_EMAIL);
-        user.setFullName(TEST_FULL_NAME);
+        user.setName(TEST_NAME);
         user.setPassword(TEST_PASSWORD);
         return user;
     }

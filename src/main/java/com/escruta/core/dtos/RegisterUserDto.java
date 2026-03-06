@@ -20,5 +20,5 @@ public class RegisterUserDto {
     private String password;
 
     @NotBlank
-    private String fullName;
+    private String name;
 }

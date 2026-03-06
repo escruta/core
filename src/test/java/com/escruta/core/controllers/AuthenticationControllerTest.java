@@ -118,11 +118,11 @@ class AuthenticationControllerTest {
         RegisterUserDto registerDto = new RegisterUserDto();
         registerDto.setEmail("newuser@example.com");
         registerDto.setPassword("Password123");
-        registerDto.setFullName("New User");
+        registerDto.setName("New User");
 
         User registeredUser = new User();
         registeredUser.setEmail("newuser@example.com");
-        registeredUser.setFullName("New User");
+        registeredUser.setName("New User");
 
         when(userService.register(any())).thenReturn(registeredUser);
 
@@ -149,7 +149,7 @@ class AuthenticationControllerTest {
         RegisterUserDto registerDto = new RegisterUserDto();
         registerDto.setEmail("not-an-email");
         registerDto.setPassword("Password123");
-        registerDto.setFullName("New User");
+        registerDto.setName("New User");
 
         mockMvc
                 .perform(post("/register")
@@ -164,7 +164,7 @@ class AuthenticationControllerTest {
         RegisterUserDto registerDto = new RegisterUserDto();
         registerDto.setEmail("newuser@example.com");
         registerDto.setPassword("weak");
-        registerDto.setFullName("New User");
+        registerDto.setName("New User");
 
         mockMvc
                 .perform(post("/register")
@@ -175,11 +175,11 @@ class AuthenticationControllerTest {
 
     @Test
     @DisplayName("Should return 400 when full name is blank")
-    void register_shouldReturn400WhenFullNameBlank() throws Exception {
+    void register_shouldReturn400WhenNameBlank() throws Exception {
         RegisterUserDto registerDto = new RegisterUserDto();
         registerDto.setEmail("newuser@example.com");
         registerDto.setPassword("Password123");
-        registerDto.setFullName("");
+        registerDto.setName("");
 
         mockMvc
                 .perform(post("/register")

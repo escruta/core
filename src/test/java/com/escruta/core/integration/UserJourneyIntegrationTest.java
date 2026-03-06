@@ -22,7 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-@DisplayName("Integration Tests - Full User Journey")
+@DisplayName("Integration Tests - User Journey")
 class UserJourneyIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
@@ -42,7 +42,7 @@ class UserJourneyIntegrationTest {
         RegisterUserDto dto = new RegisterUserDto();
         dto.setEmail(userEmail);
         dto.setPassword("Password123");
-        dto.setFullName("Integration Test User");
+        dto.setName("Integration Test User");
 
         MvcResult result = mockMvc
                 .perform(post("/register")
@@ -77,7 +77,7 @@ class UserJourneyIntegrationTest {
                 .perform(get("/users/me").header("Authorization", "Bearer " + authToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value(userEmail))
-                .andExpect(jsonPath("$.fullName").value("Integration Test User"));
+                .andExpect(jsonPath("$.name").value("Integration Test User"));
     }
 
     @Test
@@ -113,13 +113,13 @@ class UserJourneyIntegrationTest {
         mockMvc
                 .perform(post("/users/change-name")
                         .header("Authorization", "Bearer " + authToken)
-                        .param("newFullName", "Updated Name"))
+                        .param("newName", "Updated Name"))
                 .andExpect(status().isOk());
 
         mockMvc
                 .perform(get("/users/me").header("Authorization", "Bearer " + authToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.fullName").value("Updated Name"));
+                .andExpect(jsonPath("$.name").value("Updated Name"));
     }
 
     @Test
