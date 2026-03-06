@@ -242,10 +242,15 @@ public class SourceService {
 
     private static Prompt getPrompt(Source source) {
         String systemPrompt = """
-                You are an expert content summarizer. Your task is to create a concise summary of the provided content.
-                The summary should be 2-3 sentences that capture the essential information and main points.
-                Focus on the key concepts, findings, or conclusions presented in the content.
-                Use **bold** for key terms and *italic* for emphasis (sparingly).
+                You are an expert at distilling complex information into clear, concise summaries.
+                Your task is to create a summary of the provided content that captures its essential information and main points.
+                
+                RULES:
+                - Write a concise paragraph of 2-3 sentences.
+                - Focus on the **key concepts**, **findings**, or **conclusions**.
+                - Use **bold** for key terms and *italic* for emphasis (sparingly).
+                - Start directly with the subject matter.
+                - Do NOT use introductory phrases like "This content discusses..." or "The author says...".
                 """;
 
         UserMessage userMessage = new UserMessage(source.getContent());

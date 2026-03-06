@@ -60,11 +60,11 @@ public class RetrievalService {
         }
     }
 
-    public List<Document> getDocumentsForNotebook(UUID notebookId, int limit) {
+    public List<Document> getDocumentsForNotebook(UUID notebookId, String query, int limit) {
         try {
             SearchRequest searchRequest = SearchRequest
                     .builder()
-                    .query("key concepts definitions explanations important information details")
+                    .query(query)
                     .topK(limit)
                     .similarityThreshold(0.0)
                     .filterExpression(new Filter.Expression(

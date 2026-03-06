@@ -43,14 +43,17 @@ class ChatController {
             """;
 
     private static final String UNIFIED_SUMMARY_SYSTEM_MESSAGE = """
-            Write a summary paragraph of 4-5 lines about the content provided.
+            You are an expert at identifying the core essence and central themes of a set of study materials.
+            Your task is to write a comprehensive summary paragraph of 4-6 lines about the central subject matter of this notebook.
             
             RULES:
+            - Focus on the **CENTRAL THEME** and **UNIFYING CONCEPTS** of all provided sources
+            - Identify the main subject and its most significant aspects
             - Use **bold** for key terms and *italic* for emphasis (sparingly)
-            - Write as if explaining the topic directly, not describing the sources
-            - Do NOT start with "The articles...", "The sources...", "This content..." or similar
-            - Start directly with the subject matter (e.g., "Quantum computing is...")
-            - Define or mention the main concepts
+            - Write as if explaining the topic directly to a student, providing a clear bird's-eye view
+            - Do NOT start with phrases like "The articles...", "The sources...", "This content..." or similar
+            - Start directly with the core subject matter (e.g., "Quantum computing is a field that...")
+            - Ensure the summary provides a cohesive understanding of how the various pieces of information relate to each other
             """;
 
     private final SourceService sourceService;
@@ -65,14 +68,15 @@ class ChatController {
             return Optional.empty();
         }
 
-        var documents = retrievalService.getDocumentsForNotebook(notebookId, documentLimit);
+        String query = "core concepts key ideas summary main topic definitions overview";
+        var documents = retrievalService.getDocumentsForNotebook(notebookId, query, documentLimit);
         if (documents.isEmpty()) {
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException ignored) {
                 Thread.currentThread().interrupt();
             }
-            documents = retrievalService.getDocumentsForNotebook(notebookId, documentLimit);
+            documents = retrievalService.getDocumentsForNotebook(notebookId, query, documentLimit);
             if (documents.isEmpty()) {
                 return Optional.empty();
             }
@@ -92,7 +96,7 @@ class ChatController {
 
     @PostMapping("summary")
     ResponseEntity<String> generateSummary(@PathVariable UUID notebookId) {
-        Optional<String> context = getNotebookContext(notebookId, 5);
+        Optional<String> context = getNotebookContext(notebookId, 20);
 
         if (context.isEmpty()) {
             throw new IllegalStateException("No sources available or content not yet indexed");
@@ -104,7 +108,7 @@ class ChatController {
                 .create(chatModel)
                 .prompt()
                 .system(UNIFIED_SUMMARY_SYSTEM_MESSAGE)
-                .user("Write a summary paragraph about this:\n\n" + context.get())
+                .user("Analyze the following materials and write a high-level summary that captures the central theme and core concepts of this subject matter:\n\n" + context.get())
                 .call()
                 .entity(SummaryResponse.class);
 
@@ -146,19 +150,19 @@ class ChatController {
 
     @GetMapping("example-questions")
     public ResponseEntity<?> getExampleQuestions(@PathVariable UUID notebookId) {
-        Optional<String> context = getNotebookContext(notebookId, 3);
+        Optional<String> context = getNotebookContext(notebookId, 15);
 
         if (context.isEmpty()) {
             return ResponseEntity.ok(List.of());
         }
 
         ExampleQuestions exampleQuestions = ChatClient.create(chatModel).prompt().user("""
-                Generate exactly 3 questions that help understand the core concepts of this subject.
+                You are an expert tutor. Based on the provided materials, generate exactly 3 questions that help a student understand the core concepts and the central theme of this subject.
                 
                 RULES:
-                - Focus on FUNDAMENTAL CONCEPTS and key ideas that someone learning this topic must understand
-                - Ask about DEFINITIONS, MECHANISMS, RELATIONSHIPS between concepts, or CAUSE-EFFECT
-                - Questions must be about the SUBJECT MATTER itself, not about the text
+                - Focus on **FUNDAMENTAL CONCEPTS** and key ideas that someone learning this topic must understand
+                - Ask about **DEFINITIONS**, **MECHANISMS**, **RELATIONSHIPS** between concepts, or **CAUSE-EFFECT**
+                - Questions must be about the **SUBJECT MATTER** itself, not about the text
                 - Do NOT mention "article", "document", "text", "source", or "Wikipedia"
                 - Do NOT ask what the topic is, what is covered, or ask for lists/summaries
                 - Use "why", "how", or "what is the relationship between" type questions
@@ -175,6 +179,7 @@ class ChatController {
                 - "How is X different from Y?" (conceptual distinction)
                 - "What is the relationship between X and Y?" (interconnection)
                 
+                MATERIALS:
                 %s
                 """.formatted(context.get())).call().entity(ExampleQuestions.class);
 

@@ -105,7 +105,8 @@ public class ToolsGenerationService {
             throw new IllegalStateException("No sources available in this notebook");
         }
 
-        List<Document> documents = retrievalService.getDocumentsForNotebook(notebookId, 10);
+        String query = "core concepts key ideas summary main topic definitions principles overview";
+        List<Document> documents = retrievalService.getDocumentsForNotebook(notebookId, query, 30);
         if (documents.isEmpty()) {
             throw new IllegalStateException("Content not yet indexed");
         }
@@ -130,16 +131,19 @@ public class ToolsGenerationService {
                 .create(chatModel)
                 .prompt()
                 .system("""
-                        You are an expert educator. Create a comprehensive study guide based on the provided content.
+                        You are an expert educator. Your task is to analyze the provided materials and create a comprehensive study guide.
+                        
+                        First, identify the **CENTRAL THEME** that unifies all the materials.
+                        The entire study guide must revolve around this core subject.
                         
                         The study guide must include:
-                        - overview: A brief introduction to the topic (2-3 sentences)
-                        - keyConcepts: List of key terms with their definitions
-                        - importantDetails: List of supporting information and examples
-                        - connections: List of how concepts relate to each other
-                        - reviewQuestions: List of questions to test understanding
+                        - overview: A clear, high-level introduction to the identified central theme (3-4 sentences)
+                        - keyConcepts: List of the most important terms and their definitions, essential for understanding the topic
+                        - importantDetails: Crucial supporting information, examples, and key facts found in the materials
+                        - connections: Explanation of how the different concepts relate to each other to form the central theme
+                        - reviewQuestions: Challenging questions that test deep understanding of the core ideas
                         """)
-                .user("Create a study guide from this content:\n\n" + context)
+                .user("Identify the central theme and create a comprehensive study guide from these materials:\n\n" + context)
                 .call()
                 .entity(StudyGuideResponse.class);
 
@@ -147,14 +151,22 @@ public class ToolsGenerationService {
     }
 
     private String generateFlashcards(String context) throws Exception {
-        FlashcardsResponse response = ChatClient.create(chatModel).prompt().system("""
-                You are an expert educator. Create flashcards for effective spaced repetition learning.
-                
-                Create 10-15 flashcards covering the most important concepts.
-                Each flashcard has:
-                - front: A question or term
-                - back: The answer or definition (concise but complete)
-                """).user("Create flashcards from this content:\n\n" + context).call().entity(FlashcardsResponse.class);
+        FlashcardsResponse response = ChatClient
+                .create(chatModel)
+                .prompt()
+                .system("""
+                        You are an expert educator. Analyze the provided materials to identify the **CORE CONCEPTS** and **KEY DEFINITIONS**.
+                        
+                        Identify the primary subject matter and create 12-18 high-quality flashcards for effective learning.
+                        Each flashcard has:
+                        - front: A clear question or term
+                        - back: A concise but complete answer or definition
+                        
+                        Ensure the flashcards cover the most essential information found across all the materials.
+                        """)
+                .user("Create essential flashcards from these materials:\n\n" + context)
+                .call()
+                .entity(FlashcardsResponse.class);
 
         return objectMapper.writeValueAsString(response);
     }
@@ -164,20 +176,23 @@ public class ToolsGenerationService {
                 .create(chatModel)
                 .prompt()
                 .system("""
-                        You are an expert educator. Create a comprehensive questionnaire to test understanding.
+                        You are an expert educator. Analyze the provided materials to identify the **CENTRAL THEME**.
                         
-                        Create 10-12 questions with a mix of types:
+                        Create a comprehensive questionnaire to test deep understanding of this subject.
+                        Focus on how different concepts interrelate within the main theme.
+                        
+                        Create 10-15 questions with a mix of types:
                         - type: "multiple_choice", "true_false", or "short_answer"
-                        - question: The question text
+                        - question: The question text (focused on concepts, not just trivia)
                         - options: List of options (only for multiple_choice, use null otherwise)
                         - correctAnswerIndex: Index of correct option (only for multiple_choice, use null otherwise)
                         - correctAnswerBoolean: true/false (only for true_false, use null otherwise)
                         - sampleAnswer: Expected answer (only for short_answer, use null otherwise)
-                        - explanation: Why this answer is correct
+                        - explanation: A detailed explanation of why this answer is correct and how it relates to the central theme
                         
-                        Include a title for the questionnaire.
+                        Provide a descriptive title for the questionnaire that reflects the identified central theme.
                         """)
-                .user("Create a questionnaire from this content:\n\n" + context)
+                .user("Identify the central theme and create a conceptual questionnaire from these materials:\n\n" + context)
                 .call()
                 .entity(QuestionnaireResponse.class);
 
@@ -185,17 +200,23 @@ public class ToolsGenerationService {
     }
 
     private String generateMindMap(String context) throws Exception {
-        MindMapResponse response = ChatClient.create(chatModel).prompt().system("""
-                You are an expert at creating mind maps. Analyze the content and create a hierarchical mind map structure.
-                
-                The mind map must have:
-                - central: The main topic
-                - branches: List of main branches, each with:
-                  - label: The branch name
-                  - children: List of sub-branches (can be nested)
-                
-                Create a well-organized mind map with 4-6 main branches and relevant sub-topics.
-                """).user("Create a mind map from this content:\n\n" + context).call().entity(MindMapResponse.class);
+        MindMapResponse response = ChatClient
+                .create(chatModel)
+                .prompt()
+                .system("""
+                        You are an expert at creating mind maps. Analyze the provided materials to identify the **CORE ESSENCE** and logical structure.
+                        
+                        The mind map must have:
+                        - central: The main topic (the core essence derived from all sources)
+                        - branches: List of 5-7 main branches representing the primary sub-themes, each with:
+                          - label: The branch name
+                          - children: List of sub-branches representing details and related concepts (can be nested)
+                        
+                        Ensure the hierarchy is logical and helps visualize the relationships between the core concepts found in the materials.
+                        """)
+                .user("Identify the central theme and create a hierarchical mind map from these materials:\n\n" + context)
+                .call()
+                .entity(MindMapResponse.class);
 
         return objectMapper.writeValueAsString(response);
     }
