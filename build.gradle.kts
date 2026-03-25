@@ -4,6 +4,7 @@ plugins {
     id("org.springframework.boot") version "3.5.6"
     id("io.spring.dependency-management") version "1.1.7"
     id("org.graalvm.buildtools.native") version "0.11.1"
+    id("org.flywaydb.flyway") version "12.1.1"
 }
 val springAiVersion by extra("1.1.2")
 
@@ -13,6 +14,12 @@ java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
     }
+}
+
+flyway {
+    url = System.getenv("ESCRUTA_DATABASE_URL") ?: "jdbc:postgresql://localhost:5432/escruta"
+    user = System.getenv("ESCRUTA_DATABASE_USER") ?: "postgres"
+    password = System.getenv("ESCRUTA_DATABASE_PASSWORD") ?: "1234"
 }
 
 repositories {
@@ -40,8 +47,20 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
     runtimeOnly("org.postgresql:postgresql")
+    implementation("org.flywaydb:flyway-core")
+    implementation("org.flywaydb:flyway-database-postgresql")
+    implementation("org.springframework.retry:spring-retry")
+    implementation("org.springframework.boot:spring-boot-starter-aop")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
+
+buildscript {
+    dependencies {
+        classpath("org.flywaydb:flyway-database-postgresql:12.1.1")
+        classpath("org.postgresql:postgresql:42.7.4")
+    }
+}
+
 
 dependencyManagement {
     imports {

@@ -62,9 +62,33 @@ See [application.yml](./src/main/resources/application.yml) for the full list of
 
 ### Development Scripts
 
-- `./gradlew bootRun` - Start development server
-- `./gradlew build` - Build the application
-- `./gradlew clean` - Clean the build directory
+```bash
+./gradlew bootRun       # Start development server
+./gradlew build         # Build the application
+./gradlew clean         # Clean the build directory
+```
+
+## Database Migrations
+
+This project uses [Flyway](https://www.red-gate.com/products/flyway/community/) for database migrations to ensure the
+database schema stays in sync with the application code.
+
+When starting the application (e.g., `./gradlew bootRun`), Flyway will automatically apply any pending migrations to the
+database.
+
+### Managing Migrations via CLI
+
+You can use the Flyway Gradle plugin to manage the database schema manually. The database credentials will be picked up
+from your environment variables (`ESCRUTA_DATABASE_URL`, `ESCRUTA_DATABASE_USER`, `ESCRUTA_DATABASE_PASSWORD`).
+
+```bash
+./gradlew flywayInfo        # View migration status
+./gradlew flywayMigrate     # Apply pending migrations
+./gradlew flywayRepair      # Repair the schema history table
+```
+
+Migration scripts are located in `src/main/resources/db/migration/`. All new schema changes should be added as `.sql`
+scripts in this directory following the Flyway naming convention (e.g., `V2__add_new_table.sql`).
 
 ## Testing
 

@@ -2,6 +2,8 @@ package com.escruta.core.services;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
+import org.springframework.retry.annotation.Retryable;
+import org.springframework.retry.annotation.Backoff;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -49,15 +51,22 @@ public class RetrievalService {
                 .build();
     }
 
+    @Retryable(backoff = @Backoff(delay = 2000))
     public void deleteIndexedSource(UUID sourceId) {
-        try {
-            vectorStore.delete(new Filter.Expression(
-                    Filter.ExpressionType.EQ,
-                    new Filter.Key("sourceId"),
-                    new Filter.Value(sourceId.toString())
-            ));
-        } catch (Exception ignored) {
-        }
+        vectorStore.delete(new Filter.Expression(
+                Filter.ExpressionType.EQ,
+                new Filter.Key("sourceId"),
+                new Filter.Value(sourceId.toString())
+        ));
+    }
+
+    @Retryable(backoff = @Backoff(delay = 2000))
+    public void deleteIndexedNotebook(UUID notebookId) {
+        vectorStore.delete(new Filter.Expression(
+                Filter.ExpressionType.EQ,
+                new Filter.Key("notebookId"),
+                new Filter.Value(notebookId.toString())
+        ));
     }
 
     public List<Document> getDocumentsForNotebook(UUID notebookId, String query, int limit) {

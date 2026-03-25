@@ -9,7 +9,10 @@ import com.escruta.core.mappers.NotebookMapper;
 import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.repositories.SourceRepository;
 import lombok.RequiredArgsConstructor;
+import com.escruta.core.events.NotebookDeletedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -23,6 +26,7 @@ public class NotebookService {
     private final SourceRepository sourceRepository;
     private final NotebookMapper notebookMapper;
     private final NoteService noteService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public List<NotebookResponseDTO> getAllUserNotebooks() {
         return notebookRepository.findByUserId(userService.getUserId()).stream().map(NotebookResponseDTO::new).toList();
@@ -66,6 +70,7 @@ public class NotebookService {
         }
     }
 
+    @Transactional
     public NotebookResponseDTO deleteNotebook(NotebookUpdateDTO notebookDto) {
         try {
             UUID notebookId = UUID.fromString(notebookDto.id());
@@ -73,6 +78,7 @@ public class NotebookService {
             if (notebookOptional.isPresent()) {
                 Notebook notebook = notebookOptional.get();
                 notebookRepository.deleteById(notebook.getId());
+                eventPublisher.publishEvent(new NotebookDeletedEvent(this, notebook.getId()));
                 return new NotebookResponseDTO(notebook);
             }
             return null;

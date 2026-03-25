@@ -8,6 +8,9 @@ import com.escruta.core.repositories.AccessTokenRepository;
 import com.escruta.core.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.transaction.annotation.Transactional;
+import com.escruta.core.events.UserDeletedEvent;
+import com.escruta.core.entities.Notebook;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,6 +26,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final AccessTokenRepository accessTokenRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ApplicationEventPublisher eventPublisher;
 
     public UUID getUserId() {
         var user = getCurrentUser();
@@ -85,7 +89,9 @@ public class UserService {
         if (currentUser == null) {
             throw new BadCredentialsException("User not authenticated");
         }
+        var notebookIds = currentUser.getNotebooks().stream().map(Notebook::getId).toList();
         accessTokenRepository.deleteByEmail(currentUser.getEmail());
         userRepository.delete(currentUser);
+        eventPublisher.publishEvent(new UserDeletedEvent(this, notebookIds));
     }
 }

@@ -17,6 +17,8 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.context.ApplicationEventPublisher;
+import com.escruta.core.events.SourceDeletedEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -35,10 +37,10 @@ public class SourceService {
     private final SourceRepository sourceRepository;
     private final NotebookRepository notebookRepository;
     private final SourceMapper sourceMapper;
-    private final RetrievalService retrievalService;
     private final ChatModel chatModel;
     private final ExtractorService extractorService;
     private final AsyncVectorIndexingService asyncVectorIndexingService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public boolean hasNoSources(UUID notebookId) {
         return !sourceRepository.existsByNotebookId(notebookId);
@@ -124,8 +126,8 @@ public class SourceService {
         if (notebookOptional.isPresent() && sourceOptional.isPresent()) {
             Source sourceToDelete = sourceOptional.get();
             try {
-                retrievalService.deleteIndexedSource(sourceId);
                 sourceRepository.deleteById(sourceId);
+                eventPublisher.publishEvent(new SourceDeletedEvent(this, sourceId));
                 return new SourceResponseDTO(sourceToDelete);
             } catch (Exception e) {
                 throw new RuntimeException("Error while deleting the source: " + e.getMessage(), e);

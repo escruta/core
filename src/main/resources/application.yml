@@ -17,8 +17,11 @@ spring:
     password: ${ESCRUTA_DATABASE_PASSWORD:1234}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     open-in-view: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
   data:
     jdbc:
       dialect: postgresql
