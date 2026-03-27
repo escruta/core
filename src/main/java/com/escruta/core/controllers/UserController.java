@@ -20,19 +20,19 @@ public class UserController {
     }
 
     @PostMapping("/change-name")
-    public ResponseEntity<?> changeName(@RequestParam String newName) {
+    public ResponseEntity<Void> changeName(@RequestParam String newName) {
         userService.changeName(newName);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/change-password")
-    public ResponseEntity<?> changePassword(@Valid @RequestBody ChangePasswordDto changePasswordDto) {
+    public ResponseEntity<Void> changePassword(@Valid @RequestBody ChangePasswordDto changePasswordDto) {
         userService.changePassword(changePasswordDto);
         return ResponseEntity.ok().build();
     }
 
     @DeleteMapping("/me")
-    public ResponseEntity<?> deleteAccount() {
+    public ResponseEntity<Void> deleteAccount() {
         userService.deleteAccount();
         return ResponseEntity.noContent().build();
     }

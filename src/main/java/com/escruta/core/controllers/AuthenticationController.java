@@ -47,10 +47,10 @@ public class AuthenticationController {
     }
 
     @PostMapping("/introspect")
-    public ResponseEntity<?> introspect(@RequestParam("token") String token) {
+    public ResponseEntity<Map<String, Object>> introspect(@RequestParam("token") String token) {
         return tokenService
                 .validateToken(token)
-                .map(t -> ResponseEntity.ok(Map.of("active",
+                .map(t -> ResponseEntity.ok(Map.<String, Object>of("active",
                         true,
                         "sub",
                         t.getEmail(),

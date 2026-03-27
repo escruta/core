@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import javax.validation.Valid;
 import java.util.List;
@@ -24,13 +25,13 @@ public class ToolsController {
     private final UserService userService;
 
     @PostMapping("generate")
-    public ResponseEntity<?> startGeneration(
+    public ResponseEntity<JobStartedResponse> startGeneration(
             @PathVariable UUID notebookId,
             @Valid @RequestBody GenerationRequest request
     ) {
         User user = userService.getCurrentUser();
         if (user == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not authenticated");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated");
         }
 
         try {
@@ -43,17 +44,17 @@ public class ToolsController {
                             "Generation started. Poll /jobs/" + job.getId() + " for status."
                     ));
         } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+            throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
     }
 
     @GetMapping("jobs/{jobId}")
-    public ResponseEntity<?> getJobStatus(@PathVariable UUID notebookId, @PathVariable UUID jobId) {
+    public ResponseEntity<GenerationJobResponse> getJobStatus(@PathVariable UUID notebookId, @PathVariable UUID jobId) {
         User user = userService.getCurrentUser();
         if (user == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not authenticated");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated");
         }
 
         return generationService
@@ -63,10 +64,10 @@ public class ToolsController {
     }
 
     @GetMapping("jobs")
-    public ResponseEntity<?> getAllJobs(@PathVariable UUID notebookId) {
+    public ResponseEntity<List<GenerationJobResponse>> getAllJobs(@PathVariable UUID notebookId) {
         User user = userService.getCurrentUser();
         if (user == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not authenticated");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated");
         }
 
         List<GenerationJobResponse> jobs = generationService
@@ -79,10 +80,13 @@ public class ToolsController {
     }
 
     @GetMapping("jobs/latest/{type}")
-    public ResponseEntity<?> getLatestJob(@PathVariable UUID notebookId, @PathVariable GenerationJob.JobType type) {
+    public ResponseEntity<GenerationJobResponse> getLatestJob(
+            @PathVariable UUID notebookId,
+            @PathVariable GenerationJob.JobType type
+    ) {
         User user = userService.getCurrentUser();
         if (user == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not authenticated");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated");
         }
 
         List<GenerationJob> activeJobs = generationService.getActiveJobs(notebookId, user.getId(), type);

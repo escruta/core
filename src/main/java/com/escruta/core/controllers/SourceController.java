@@ -1,5 +1,6 @@
 package com.escruta.core.controllers;
 
+import com.escruta.core.dtos.SummaryResponse;
 import com.escruta.core.dtos.source.SourceCreationDTO;
 import com.escruta.core.dtos.source.SourceFileCreationDTO;
 import com.escruta.core.dtos.source.SourceResponseDTO;
@@ -54,7 +55,7 @@ public class SourceController {
     }
 
     @PostMapping("/upload")
-    public ResponseEntity<?> createNotebookSourceFromFile(
+    public ResponseEntity<SourceWithContentDTO> createNotebookSourceFromFile(
             @PathVariable UUID notebookId,
             @RequestParam("file") MultipartFile file,
             @RequestParam("title") String title,
@@ -109,15 +110,21 @@ public class SourceController {
     }
 
     @PostMapping("{sourceId}/summary")
-    public ResponseEntity<String> generateSourceSummary(@PathVariable UUID notebookId, @PathVariable UUID sourceId) {
+    public ResponseEntity<SummaryResponse> generateSourceSummary(
+            @PathVariable UUID notebookId,
+            @PathVariable UUID sourceId
+    ) {
         String summary = sourceService.generateSummary(notebookId, sourceId);
-        return ResponseEntity.ok(summary);
+        return ResponseEntity.ok(new SummaryResponse(summary));
     }
 
     @GetMapping("{sourceId}/summary")
-    public ResponseEntity<String> getSourceSummary(@PathVariable UUID notebookId, @PathVariable UUID sourceId) {
+    public ResponseEntity<SummaryResponse> getSourceSummary(
+            @PathVariable UUID notebookId,
+            @PathVariable UUID sourceId
+    ) {
         String summary = sourceService.getSummary(notebookId, sourceId);
-        return ResponseEntity.ok(summary);
+        return ResponseEntity.ok(new SummaryResponse(summary));
     }
 
     @DeleteMapping("{sourceId}/summary")

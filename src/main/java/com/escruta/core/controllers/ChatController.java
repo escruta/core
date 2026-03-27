@@ -95,7 +95,7 @@ class ChatController {
     }
 
     @PostMapping("summary")
-    ResponseEntity<String> generateSummary(@PathVariable UUID notebookId) {
+    ResponseEntity<SummaryResponse> generateSummary(@PathVariable UUID notebookId) {
         Optional<String> context = getNotebookContext(notebookId, 20);
 
         if (context.isEmpty()) {
@@ -117,11 +117,11 @@ class ChatController {
         }
 
         notebookRepository.updateSummary(notebookId, summary.summary());
-        return ResponseEntity.ok(summary.summary());
+        return ResponseEntity.ok(summary);
     }
 
     @GetMapping("summary")
-    ResponseEntity<String> getSummary(@PathVariable UUID notebookId) {
+    ResponseEntity<SummaryResponse> getSummary(@PathVariable UUID notebookId) {
         var notebook = notebookRepository.findById(notebookId).orElse(null);
 
         if (notebook == null) {
@@ -130,10 +130,10 @@ class ChatController {
 
         String summary = notebook.getSummary();
         if (summary == null || summary.trim().isEmpty()) {
-            return ResponseEntity.ok("");
+            return ResponseEntity.ok(new SummaryResponse(""));
         }
 
-        return ResponseEntity.ok(summary);
+        return ResponseEntity.ok(new SummaryResponse(summary));
     }
 
     @DeleteMapping("summary")
@@ -149,11 +149,11 @@ class ChatController {
     }
 
     @GetMapping("example-questions")
-    public ResponseEntity<?> getExampleQuestions(@PathVariable UUID notebookId) {
+    public ResponseEntity<ExampleQuestions> getExampleQuestions(@PathVariable UUID notebookId) {
         Optional<String> context = getNotebookContext(notebookId, 15);
 
         if (context.isEmpty()) {
-            return ResponseEntity.ok(List.of());
+            return ResponseEntity.ok(new ExampleQuestions(List.of()));
         }
 
         ExampleQuestions exampleQuestions = ChatClient.create(chatModel).prompt().user("""
