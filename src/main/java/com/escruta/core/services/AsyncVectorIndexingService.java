@@ -5,7 +5,9 @@ import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -18,11 +20,37 @@ public class AsyncVectorIndexingService {
             TokenTextSplitter textSplitter = new TokenTextSplitter(500, 100, 5, 10000, true);
             List<Document> chunks = textSplitter.apply(List.of(new Document(content)));
 
+            List<Document> documentsToSave = new ArrayList<>();
             for (int i = 0; i < chunks.size(); i++) {
                 try {
-                    retrievalService.indexSourceChunk(notebookId, sourceId, title, link, chunks.get(i), i);
+                    Document chunk = chunks.get(i);
+                    String text = chunk.getText() != null ?
+                            chunk.getText() :
+                            "";
+                    Document document = new Document(
+                            UUID.randomUUID().toString(), text, Map.of(
+                            "sourceId",
+                            sourceId.toString(),
+                            "notebookId",
+                            notebookId.toString(),
+                            "title",
+                            title != null ?
+                                    title :
+                                    "Untitled",
+                            "link",
+                            link != null ?
+                                    link :
+                                    "",
+                            "chunkIndex",
+                            String.valueOf(i)
+                    )
+                    );
+                    documentsToSave.add(document);
                 } catch (Exception ignored) {
                 }
+            }
+            if (!documentsToSave.isEmpty()) {
+                retrievalService.indexSourceChunks(documentsToSave);
             }
         } catch (Exception ignored) {
         }

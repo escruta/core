@@ -11,7 +11,6 @@ import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -97,37 +96,9 @@ public class RetrievalService {
         }
     }
 
-    public void indexSourceChunk(
-            UUID notebookId,
-            UUID sourceId,
-            String title,
-            String link,
-            Document chunk,
-            int chunkIndex
-    ) {
+    public void indexSourceChunks(List<Document> chunks) {
         try {
-            String text = chunk.getText() != null ?
-                    chunk.getText() :
-                    "";
-            Document document = new Document(
-                    UUID.randomUUID().toString(), text, Map.of(
-                    "sourceId",
-                    sourceId.toString(),
-                    "notebookId",
-                    notebookId.toString(),
-                    "title",
-                    title != null ?
-                            title :
-                            "Untitled",
-                    "link",
-                    link != null ?
-                            link :
-                            "",
-                    "chunkIndex",
-                    String.valueOf(chunkIndex)
-            )
-            );
-            vectorStore.add(List.of(document));
+            vectorStore.add(chunks);
         } catch (Exception ignored) {
         }
     }
