@@ -96,28 +96,69 @@ class ChatController {
 
     @PostMapping("summary")
     ResponseEntity<SummaryResponse> generateSummary(@PathVariable UUID notebookId) {
-        Optional<String> context = getNotebookContext(notebookId, 20);
+        Optional<String> contextOpt = getNotebookContext(notebookId, 20);
 
-        if (context.isEmpty()) {
+        if (contextOpt.isEmpty()) {
             throw new IllegalStateException("No sources available or content not yet indexed");
         }
 
+        String context = contextOpt.get();
         notebookRepository.updateSummary(notebookId, null);
 
-        SummaryResponse summary = ChatClient
-                .create(chatModel)
-                .prompt()
-                .system(UNIFIED_SUMMARY_SYSTEM_MESSAGE)
-                .user("Analyze the following materials and write a high-level summary that captures the central theme and core concepts of this subject matter:\n\n" + context.get())
-                .call()
-                .entity(SummaryResponse.class);
+        int chunkSize = 50000;
+        String finalSummaryText;
 
-        if (summary == null || summary.summary() == null || summary.summary().trim().isEmpty()) {
+        if (context.length() > chunkSize) {
+            StringBuilder intermediateSummaries = new StringBuilder();
+            int start = 0;
+            while (start < context.length()) {
+                int end = Math.min(start + chunkSize, context.length());
+                String chunk = context.substring(start, end);
+
+                SummaryResponse chunkSummary = ChatClient
+                        .create(chatModel)
+                        .prompt()
+                        .system(UNIFIED_SUMMARY_SYSTEM_MESSAGE)
+                        .user("Analyze the following materials and write a high-level summary that captures the central theme and core concepts of this subject matter:\n\n" + chunk)
+                        .call()
+                        .entity(SummaryResponse.class);
+
+                if (chunkSummary != null && chunkSummary.summary() != null) {
+                    intermediateSummaries.append(chunkSummary.summary()).append("\n\n");
+                }
+                start = end;
+            }
+
+            SummaryResponse finalSummary = ChatClient
+                    .create(chatModel)
+                    .prompt()
+                    .system(UNIFIED_SUMMARY_SYSTEM_MESSAGE)
+                    .user("Analyze the following materials (which are partial summaries) and write a single, cohesive high-level summary that captures the central theme and core concepts of the entire subject matter:\n\n" + intermediateSummaries)
+                    .call()
+                    .entity(SummaryResponse.class);
+            finalSummaryText = finalSummary != null ?
+                    finalSummary.summary() :
+                    null;
+
+        } else {
+            SummaryResponse summary = ChatClient
+                    .create(chatModel)
+                    .prompt()
+                    .system(UNIFIED_SUMMARY_SYSTEM_MESSAGE)
+                    .user("Analyze the following materials and write a high-level summary that captures the central theme and core concepts of this subject matter:\n\n" + context)
+                    .call()
+                    .entity(SummaryResponse.class);
+            finalSummaryText = summary != null ?
+                    summary.summary() :
+                    null;
+        }
+
+        if (finalSummaryText == null || finalSummaryText.trim().isEmpty()) {
             throw new RuntimeException("Failed to generate summary: empty response from AI");
         }
 
-        notebookRepository.updateSummary(notebookId, summary.summary());
-        return ResponseEntity.ok(summary);
+        notebookRepository.updateSummary(notebookId, finalSummaryText);
+        return ResponseEntity.ok(new SummaryResponse(finalSummaryText));
     }
 
     @GetMapping("summary")

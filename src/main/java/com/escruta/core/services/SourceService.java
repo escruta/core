@@ -242,7 +242,7 @@ public class SourceService {
         return new SourceWithContentDTO(source);
     }
 
-    private static Prompt getPrompt(Source source) {
+    private static Prompt getPrompt(String content) {
         String systemPrompt = """
                 You are an expert at distilling complex information into clear, concise summaries.
                 Your task is to create a summary of the provided content that captures its essential information and main points.
@@ -255,7 +255,7 @@ public class SourceService {
                 - Do NOT use introductory phrases like "This content discusses..." or "The author says...".
                 """;
 
-        UserMessage userMessage = new UserMessage(source.getContent());
+        UserMessage userMessage = new UserMessage(content);
         return new Prompt(List.of(new SystemMessage(systemPrompt), userMessage));
     }
 
@@ -273,9 +273,29 @@ public class SourceService {
         source.setSummary(null);
         sourceRepository.save(source);
 
-        Prompt prompt = getPrompt(source);
-        var response = chatModel.call(prompt);
-        String summary = response.getResult().getOutput().getText();
+        String content = source.getContent();
+        String summary;
+        int chunkSize = 50000;
+
+        if (content != null && content.length() > chunkSize) {
+            StringBuilder intermediateSummaries = new StringBuilder();
+            int start = 0;
+            while (start < content.length()) {
+                int end = Math.min(start + chunkSize, content.length());
+                String chunk = content.substring(start, end);
+                var response = chatModel.call(getPrompt(chunk));
+                intermediateSummaries.append(response.getResult().getOutput().getText()).append("\n\n");
+                start = end;
+            }
+            var finalResponse = chatModel.call(getPrompt(intermediateSummaries.toString()));
+            summary = finalResponse.getResult().getOutput().getText();
+        } else {
+            Prompt prompt = getPrompt(content != null ?
+                    content :
+                    "");
+            var response = chatModel.call(prompt);
+            summary = response.getResult().getOutput().getText();
+        }
 
         source.setSummary(summary);
         sourceRepository.save(source);
