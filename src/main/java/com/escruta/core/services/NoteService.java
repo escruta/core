@@ -25,32 +25,48 @@ public class NoteService {
     private final NoteMapper noteMapper;
 
     public List<NoteResponseDTO> getNotes(UUID notebookId) {
-        return noteRepository.findByNotebookId(notebookId).stream().map(NoteResponseDTO::new).toList();
+        var currentUser = userService.getCurrentUser();
+        if (currentUser == null)
+            return List.of();
+
+        if (notebookId != null) {
+            return noteRepository
+                    .findByNotebookIdAndUserId(notebookId, currentUser.getId())
+                    .stream()
+                    .map(NoteResponseDTO::new)
+                    .toList();
+        }
+        return noteRepository.findByUserId(currentUser.getId()).stream().map(NoteResponseDTO::new).toList();
     }
 
-    public NoteWithContentDTO getNote(UUID notebookId, UUID noteId) {
+    public NoteWithContentDTO getNote(UUID noteId) {
         Optional<Note> note = noteRepository.findById(noteId);
-        if (note.isEmpty() || !notebookRepository.existsById(notebookId)) {
-            return null;
-        }
         return note.map(NoteWithContentDTO::new).orElse(null);
     }
 
-    public NoteResponseDTO addNote(UUID notebookId, NoteCreationDTO newNoteDto) {
+    public NoteResponseDTO addNote(NoteCreationDTO newNoteDto) {
         var currentUser = userService.getCurrentUser();
-        Optional<Notebook> notebookOptional = notebookRepository.findById(notebookId);
-        if (notebookOptional.isPresent() && currentUser != null) {
-            Note note = noteMapper.toNote(newNoteDto, notebookOptional.get());
-            noteRepository.save(note);
-            return new NoteResponseDTO(note);
+        if (currentUser == null)
+            return null;
+
+        Notebook notebook = null;
+        if (newNoteDto.notebookId() != null) {
+            Optional<Notebook> notebookOptional = notebookRepository.findById(newNoteDto.notebookId());
+            if (notebookOptional.isPresent()) {
+                notebook = notebookOptional.get();
+            } else {
+                return null;
+            }
         }
-        return null;
+
+        Note note = noteMapper.toNote(newNoteDto, notebook, currentUser);
+        noteRepository.save(note);
+        return new NoteResponseDTO(note);
     }
 
-    public NoteResponseDTO updateNote(UUID notebookId, NoteUpdateDTO newNoteDto) {
-        Optional<Notebook> notebookOptional = notebookRepository.findById(notebookId);
+    public NoteResponseDTO updateNote(NoteUpdateDTO newNoteDto) {
         Optional<Note> noteOptional = noteRepository.findById(UUID.fromString(newNoteDto.id()));
-        if (notebookOptional.isPresent() && noteOptional.isPresent()) {
+        if (noteOptional.isPresent()) {
             Note note = noteOptional.get();
             noteMapper.updateNoteFromDto(newNoteDto, note);
             noteRepository.save(note);
@@ -59,11 +75,10 @@ public class NoteService {
         return null;
     }
 
-    public NoteResponseDTO deleteNote(UUID notebookId, UUID noteId) {
-        Optional<Notebook> notebookOptional = notebookRepository.findById(notebookId);
+    public NoteResponseDTO deleteNote(UUID noteId) {
         Optional<Note> noteOptional = noteRepository.findById(noteId);
-        if (notebookOptional.isPresent() && noteOptional.isPresent()) {
-            noteRepository.deleteById(noteOptional.get().getId());
+        if (noteOptional.isPresent()) {
+            noteRepository.deleteById(noteId);
             return new NoteResponseDTO(noteOptional.get());
         }
         return null;

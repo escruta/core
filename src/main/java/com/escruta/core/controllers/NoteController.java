@@ -15,24 +15,23 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("notebooks/{notebookId}/notes")
+@RequestMapping("notes")
 @RequiredArgsConstructor
 public class NoteController {
     private final NoteService noteService;
 
     @GetMapping
-    public ResponseEntity<List<NoteResponseDTO>> getNotebookNotes(
-            @PathVariable UUID notebookId
+    public ResponseEntity<List<NoteResponseDTO>> getNotes(
+            @RequestParam(required = false) UUID notebookId
     ) {
         return ResponseEntity.ok(noteService.getNotes(notebookId));
     }
 
     @GetMapping("{noteId}")
-    public ResponseEntity<NoteWithContentDTO> getNotebookNoteContent(
-            @PathVariable UUID notebookId,
+    public ResponseEntity<NoteWithContentDTO> getNoteContent(
             @PathVariable UUID noteId
     ) {
-        var note = noteService.getNote(notebookId, noteId);
+        var note = noteService.getNote(noteId);
         return note != null ?
                 ResponseEntity.ok(note) :
                 ResponseEntity.notFound().build();
@@ -40,31 +39,30 @@ public class NoteController {
     }
 
     @PostMapping
-    public ResponseEntity<NoteResponseDTO> createNotebookNote(
-            @PathVariable UUID notebookId,
+    public ResponseEntity<NoteResponseDTO> createNote(
             @Valid @RequestBody NoteCreationDTO noteCreationDTO
     ) {
-        var note = noteService.addNote(notebookId, noteCreationDTO);
-        return ResponseEntity.status(HttpStatus.CREATED).body(note);
+        var note = noteService.addNote(noteCreationDTO);
+        return note != null ?
+                ResponseEntity.status(HttpStatus.CREATED).body(note) :
+                ResponseEntity.badRequest().build();
     }
 
     @PutMapping
-    public ResponseEntity<NoteResponseDTO> updateNotebookNote(
-            @PathVariable UUID notebookId,
+    public ResponseEntity<NoteResponseDTO> updateNote(
             @Valid @RequestBody NoteUpdateDTO noteUpdateDTO
     ) {
-        var note = noteService.updateNote(notebookId, noteUpdateDTO);
+        var note = noteService.updateNote(noteUpdateDTO);
         return note != null ?
                 ResponseEntity.ok(note) :
                 ResponseEntity.notFound().build();
     }
 
     @DeleteMapping("{noteId}")
-    public ResponseEntity<NoteResponseDTO> deleteNotebookNote(
-            @PathVariable UUID notebookId,
+    public ResponseEntity<NoteResponseDTO> deleteNote(
             @PathVariable UUID noteId
     ) {
-        var note = noteService.deleteNote(notebookId, noteId);
+        var note = noteService.deleteNote(noteId);
         return note != null ?
                 ResponseEntity.ok(note) :
                 ResponseEntity.notFound().build();

@@ -4,13 +4,15 @@ import com.escruta.core.dtos.note.NoteCreationDTO;
 import com.escruta.core.dtos.note.NoteUpdateDTO;
 import com.escruta.core.entities.Note;
 import com.escruta.core.entities.Notebook;
+import com.escruta.core.entities.User;
 import org.springframework.stereotype.Component;
 
 @Component
 public class NoteMapper {
-    public Note toNote(NoteCreationDTO dto, Notebook notebook) {
+    public Note toNote(NoteCreationDTO dto, Notebook notebook, User user) {
         Note note = new Note();
         note.setNotebook(notebook);
+        note.setUser(user);
         note.setIcon(dto.icon());
         note.setTitle(dto.title());
         note.setContent(dto.content());

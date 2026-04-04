@@ -18,7 +18,9 @@ public record NoteWithContentDTO(
     public NoteWithContentDTO(Note note) {
         this(
                 note.getId(),
-                note.getNotebook().getId(),
+                note.getNotebook() != null ?
+                        note.getNotebook().getId() :
+                        null,
                 note.getSource() != null ?
                         note.getSource().getId() :
                         null,

@@ -9,5 +9,7 @@ import java.util.UUID;
 
 @Repository
 public interface NoteRepository extends CrudRepository<Note, UUID> {
-    List<Note> findByNotebookId(UUID notebookId);
+    List<Note> findByNotebookIdAndUserId(UUID notebookId, UUID userId);
+
+    List<Note> findByUserId(UUID userId);
 }

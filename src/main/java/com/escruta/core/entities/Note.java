@@ -20,8 +20,12 @@ public class Note {
     private UUID id;
 
     @ManyToOne
-    @JoinColumn(nullable = false)
+    @JoinColumn()
     private Notebook notebook;
+
+    @ManyToOne
+    @JoinColumn(nullable = false)
+    private User user;
 
     @OneToOne
     @JoinColumn()
