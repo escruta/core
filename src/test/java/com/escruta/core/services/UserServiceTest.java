@@ -7,6 +7,7 @@ import com.escruta.core.exceptions.DuplicateFieldException;
 import com.escruta.core.repositories.AccessTokenRepository;
 import com.escruta.core.repositories.UserRepository;
 import org.junit.jupiter.api.AfterEach;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,9 @@ class UserServiceTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private UserService userService;
@@ -265,6 +269,7 @@ class UserServiceTest {
 
         verify(accessTokenRepository).deleteByEmail(TEST_EMAIL);
         verify(userRepository).delete(user);
+        verify(eventPublisher).publishEvent(any(com.escruta.core.events.UserDeletedEvent.class));
     }
 
     @Test
@@ -286,6 +291,7 @@ class UserServiceTest {
         user.setEmail(TEST_EMAIL);
         user.setName(TEST_NAME);
         user.setPassword(TEST_PASSWORD);
+        user.setNotebooks(new java.util.ArrayList<>());
         return user;
     }
 }
