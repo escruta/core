@@ -47,4 +47,13 @@ public class Note {
     @UpdateTimestamp
     @Column()
     private Timestamp updatedAt;
+
+    @PrePersist
+    @PreUpdate
+    @PreRemove
+    private void touchNotebook() {
+        if (notebook != null) {
+            notebook.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
+        }
+    }
 }
