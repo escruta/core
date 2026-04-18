@@ -1,9 +1,9 @@
 # Escruta - Core
 
-_"Think, ask, learn"_
+This is the core engine of the Escruta research assistant platform. Built with Java and Spring Boot, it handles the
+business logic, document processing, AI orchestration, and persistent storage for your research data.
 
-**Escruta Core** is the core engine of the Escruta research assistant platform. Built with Java and Spring Boot, it
-handles the business logic, document processing, AI orchestration, and persistent storage for your research data.
+Built with Java 21, Spring Boot 3.5, Spring AI, PostgreSQL, and Lombok.
 
 ## Getting Started
 
@@ -24,7 +24,7 @@ handles the business logic, document processing, AI orchestration, and persisten
 
 ### Installation
 
-- `./gradlew bootRun` - Start the development server
+- `./gradlew bootRun` - Start the development server.
 
 The backend service will be available at [localhost:8080](http://localhost:8080) by default.
 
@@ -119,15 +119,6 @@ See [application-test.yml](./src/test/resources/application-test.yml) for the te
 
 Tests are organized by layer:
 
-- `controllers/` - HTTP endpoint tests with mocked security
-- `services/` - Business logic unit tests
-- `integration/` - End-to-end user journey tests
-
-## Technology Stack
-
-- **Runtime**: Java 21 with Gradle for build management.
-- **Framework**: Spring Boot 3.5 for robust backend development.
-- **AI Integration**: Spring AI for seamless interaction with Large Language Models.
-- **Database**: PostgreSQL for relational data and Qdrant for vector similarity search.
-- **Security**: Spring Security (OAuth 2.0 Resource Server Opaque Token) for stateless authentication.
-- **Object Mapping**: Project Lombok to reduce boilerplate code.
+- `controllers/` - HTTP endpoint tests with mocked security.
+- `services/` - Business logic unit tests.
+- `integration/` - End-to-end user journey tests.
