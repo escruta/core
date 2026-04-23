@@ -7,15 +7,15 @@ spring:
   main:
     allow-bean-definition-overriding: true
   datasource:
-    url: jdbc:postgresql://localhost:5432/escruta_test
-    username: postgres
+    url: jdbc:mariadb://localhost:3306/escruta_test
+    username: root
     password: 1234
   jpa:
     hibernate:
       ddl-auto: create-drop
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+        dialect: org.hibernate.dialect.MariaDBDialect
   ai:
     openai:
       base-url: "http://localhost:8080"

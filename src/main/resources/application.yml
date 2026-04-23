@@ -12,8 +12,8 @@ spring:
       max-request-size: 50MB
       enabled: true
   datasource:
-    url: ${ESCRUTA_DATABASE_URL:jdbc:postgresql://localhost:5432/escruta}
-    username: ${ESCRUTA_DATABASE_USER:postgres}
+    url: ${ESCRUTA_DATABASE_URL:jdbc:mariadb://localhost:3306/escruta}
+    username: ${ESCRUTA_DATABASE_USER:root}
     password: ${ESCRUTA_DATABASE_PASSWORD:1234}
   jpa:
     hibernate:
@@ -24,14 +24,14 @@ spring:
     baseline-on-migrate: true
   data:
     jdbc:
-      dialect: postgresql
+      dialect: maria
   ai:
     chat:
       memory:
         repository:
           jdbc:
-            initialize-schema: always
-            platform: postgresql
+            initialize-schema: never
+            platform: mysql
     openai:
       base-url: ${ESCRUTA_AI_BASE_URL}
       api-key: ${ESCRUTA_AI_API_KEY}

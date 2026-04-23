@@ -17,8 +17,8 @@ java {
 }
 
 flyway {
-    url = System.getenv("ESCRUTA_DATABASE_URL") ?: "jdbc:postgresql://localhost:5432/escruta"
-    user = System.getenv("ESCRUTA_DATABASE_USER") ?: "postgres"
+    url = System.getenv("ESCRUTA_DATABASE_URL") ?: "jdbc:mariadb://localhost:3306/escruta"
+    user = System.getenv("ESCRUTA_DATABASE_USER") ?: "root"
     password = System.getenv("ESCRUTA_DATABASE_PASSWORD") ?: "1234"
 }
 
@@ -46,21 +46,23 @@ dependencies {
     annotationProcessor("org.projectlombok:lombok:1.18.30")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
-    runtimeOnly("org.postgresql:postgresql")
+    runtimeOnly("org.mariadb.jdbc:mariadb-java-client")
     implementation("org.flywaydb:flyway-core")
-    implementation("org.flywaydb:flyway-database-postgresql")
+    implementation("org.flywaydb:flyway-mysql")
     implementation("org.springframework.retry:spring-retry")
     implementation("org.springframework.boot:spring-boot-starter-aop")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 buildscript {
+    repositories {
+        mavenCentral()
+    }
     dependencies {
-        classpath("org.flywaydb:flyway-database-postgresql:12.1.1")
-        classpath("org.postgresql:postgresql:42.7.4")
+        classpath("org.flywaydb:flyway-mysql:12.1.1")
+        classpath("org.mariadb.jdbc:mariadb-java-client:3.5.1")
     }
 }
-
 
 dependencyManagement {
     imports {

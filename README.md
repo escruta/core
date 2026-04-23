@@ -3,22 +3,22 @@
 This is the core engine of the Escruta research assistant platform. Built with Java and Spring Boot, it handles the
 business logic, document processing, AI orchestration, and persistent storage for your research data.
 
-Built with Java 21, Spring Boot 3.5, Spring AI, PostgreSQL, and Lombok.
+Built with Java 21, Spring Boot 3.5, Spring AI, MariaDB, and Lombok.
 
 ## Getting Started
 
 ### Prerequisites
 
 - Java Development Kit (JDK) 21 or higher.
-- PostgreSQL (version 16 or higher).
+- MariaDB (version 11.7).
 - Qdrant (for vector search).
 - An OpenAI-compatible API.
 - Escruta Extractor service running (see [Escruta Extractor](https://github.com/escruta/extractor)).
 
 > [!TIP]
-> You can use Docker to quickly spin up both PostgreSQL and Qdrant:
+> You can use Docker to quickly spin up both MariaDB and Qdrant:
 > ```bash
-> docker run -d --name escruta-db -p 5432:5432 -e POSTGRES_PASSWORD=1234 -e POSTGRES_DB=escruta postgres
+> docker run -d --name escruta-db -p 3306:3306 -e MARIADB_ROOT_PASSWORD=1234 -e MARIADB_DATABASE=escruta mariadb:11.7
 > docker run -d --name escruta-qdrant -p 6333:6333 -p 6334:6334 qdrant/qdrant
 > ```
 
@@ -35,28 +35,28 @@ The backend service will be available at [localhost:8080](http://localhost:8080)
 The application can be configured using environment variables. These can be set in your shell or passed to the
 application at runtime.
 
-| Variable                           | Description                          | Default                                    |
-|------------------------------------|--------------------------------------|--------------------------------------------|
-| `ESCRUTA_PORT`                     | Backend port                         | `8080`                                     |
-| `ESCRUTA_DATABASE_URL`             | JDBC URL for the database            | `jdbc:postgresql://localhost:5432/escruta` |
-| `ESCRUTA_DATABASE_USER`            | Database username                    | `postgres`                                 |
-| `ESCRUTA_DATABASE_PASSWORD`        | Database password                    | `1234`                                     |
-| `ESCRUTA_AI_BASE_URL`              | Base URL for the AI provider         | (Required)                                 |
-| `ESCRUTA_AI_API_KEY`               | API Key for the AI provider          | (Required)                                 |
-| `ESCRUTA_AI_MODEL`                 | AI model to use for chat             | (Required)                                 |
-| `ESCRUTA_AI_CHAT_COMPLETIONS_PATH` | Path for chat completions endpoint   | `/v1/chat/completions`                     |
-| `ESCRUTA_AI_EMBEDDING_MODEL`       | AI model to use for embeddings       | (Required)                                 |
-| `ESCRUTA_AI_EMBEDDING_DIMENSIONS`  | Dimensions of the embedding vectors  | `768`                                      |
-| `ESCRUTA_AI_EMBEDDING_PATH`        | Path for embeddings endpoint         | `/v1/embeddings`                           |
-| `ESCRUTA_AI_EMBEDDING_BASE_URL`    | Base URL for embeddings (if differs) | `ESCRUTA_AI_BASE_URL`                      |
-| `ESCRUTA_AI_EMBEDDING_API_KEY`     | API Key for embeddings (if differs)  | `ESCRUTA_AI_API_KEY`                       |
-| `ESCRUTA_QDRANT_HOST`              | Qdrant database host                 | `localhost`                                |
-| `ESCRUTA_QDRANT_PORT`              | Qdrant database port                 | `6334`                                     |
-| `ESCRUTA_QDRANT_API_KEY`           | API Key for Qdrant (if required)     |                                            |
-| `ESCRUTA_QDRANT_COLLECTION`        | Qdrant collection name               | `escruta`                                  |
-| `ESCRUTA_CORS_ALLOWED_ORIGINS`     | Allowed origins for CORS             | `http://localhost:5173`                    |
-| `ESCRUTA_EXTRACTOR_URL`            | Extractor service URL                | `http://localhost:8000`                    |
-| `ESCRUTA_EXTRACTOR_API_KEY`        | Internal API Key for the Extractor   | (Required)                                 |
+| Variable                           | Description                          | Default                                 |
+|------------------------------------|--------------------------------------|-----------------------------------------|
+| `ESCRUTA_PORT`                     | Backend port                         | `8080`                                  |
+| `ESCRUTA_DATABASE_URL`             | JDBC URL for the database            | `jdbc:mariadb://localhost:3306/escruta` |
+| `ESCRUTA_DATABASE_USER`            | Database username                    | `root`                                  |
+| `ESCRUTA_DATABASE_PASSWORD`        | Database password                    | `1234`                                  |
+| `ESCRUTA_AI_BASE_URL`              | Base URL for the AI provider         | (Required)                              |
+| `ESCRUTA_AI_API_KEY`               | API Key for the AI provider          | (Required)                              |
+| `ESCRUTA_AI_MODEL`                 | AI model to use for chat             | (Required)                              |
+| `ESCRUTA_AI_CHAT_COMPLETIONS_PATH` | Path for chat completions endpoint   | `/v1/chat/completions`                  |
+| `ESCRUTA_AI_EMBEDDING_MODEL`       | AI model to use for embeddings       | (Required)                              |
+| `ESCRUTA_AI_EMBEDDING_DIMENSIONS`  | Dimensions of the embedding vectors  | `768`                                   |
+| `ESCRUTA_AI_EMBEDDING_PATH`        | Path for embeddings endpoint         | `/v1/embeddings`                        |
+| `ESCRUTA_AI_EMBEDDING_BASE_URL`    | Base URL for embeddings (if differs) | `ESCRUTA_AI_BASE_URL`                   |
+| `ESCRUTA_AI_EMBEDDING_API_KEY`     | API Key for embeddings (if differs)  | `ESCRUTA_AI_API_KEY`                    |
+| `ESCRUTA_QDRANT_HOST`              | Qdrant database host                 | `localhost`                             |
+| `ESCRUTA_QDRANT_PORT`              | Qdrant database port                 | `6334`                                  |
+| `ESCRUTA_QDRANT_API_KEY`           | API Key for Qdrant (if required)     |                                         |
+| `ESCRUTA_QDRANT_COLLECTION`        | Qdrant collection name               | `escruta`                               |
+| `ESCRUTA_CORS_ALLOWED_ORIGINS`     | Allowed origins for CORS             | `http://localhost:5173`                 |
+| `ESCRUTA_EXTRACTOR_URL`            | Extractor service URL                | `http://localhost:8000`                 |
+| `ESCRUTA_EXTRACTOR_API_KEY`        | Internal API Key for the Extractor   | (Required)                              |
 
 See [application.yml](./src/main/resources/application.yml) for the full list of configuration options.
 
@@ -88,19 +88,19 @@ from your environment variables (`ESCRUTA_DATABASE_URL`, `ESCRUTA_DATABASE_USER`
 ```
 
 Migration scripts are located in `src/main/resources/db/migration/`. All new schema changes should be added as `.sql`
-scripts in this directory following the Flyway naming convention (e.g., `V2__add_new_table.sql`).
+scripts in this directory following the Flyway naming convention (e.g., `V1__initial_schema.sql`).
 
 ## Testing
 
-Tests run against a dedicated PostgreSQL database (`escruta_test`) to ensure consistency with production. Jacoco
+Tests run against a dedicated MariaDB database (`escruta_test`) to ensure consistency with production. Jacoco
 generates coverage reports automatically after test execution.
 
 ### Prerequisites
 
-Ensure you have a PostgreSQL database named `escruta_test`:
+Ensure you have a MariaDB database named `escruta_test`:
 
 ```bash
-psql -U postgres -c "CREATE DATABASE escruta_test;"
+mariadb -u root -p1234 -e "CREATE DATABASE escruta_test;"
 ```
 
 ### Running Tests
