@@ -89,17 +89,17 @@ CREATE TABLE notes
     CONSTRAINT fk_notes_users FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
-CREATE TABLE spring_ai_chat_memory
+CREATE TABLE SPRING_AI_CHAT_MEMORY
 (
     conversation_id varchar(36) NOT NULL,
     content         text        NOT NULL,
     type            varchar(10) NOT NULL,
     `timestamp`     timestamp   NOT NULL,
-    CONSTRAINT spring_ai_chat_memory_type_check CHECK (type IN ('USER', 'ASSISTANT', 'SYSTEM', 'TOOL'))
+    CONSTRAINT SPRING_AI_CHAT_MEMORY_TYPE_CHECK CHECK (type IN ('USER', 'ASSISTANT', 'SYSTEM', 'TOOL'))
 );
 
-CREATE INDEX spring_ai_chat_memory_conversation_id_timestamp_idx
-    ON spring_ai_chat_memory (conversation_id, `timestamp`);
+CREATE INDEX SPRING_AI_CHAT_MEMORY_CONVERSATION_ID_TIMESTAMP_IDX
+    ON SPRING_AI_CHAT_MEMORY (conversation_id, `timestamp`);
 
 ALTER TABLE conversations
     ADD CONSTRAINT fka2jxphva2eexgctoqxgpl4krc FOREIGN KEY (notebook_id) REFERENCES notebooks (id);
