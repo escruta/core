@@ -11,7 +11,7 @@ Built with Java 21, Spring Boot 3.5, Spring AI, MariaDB, and Lombok.
 
 - Java Development Kit (JDK) 21 or higher.
 - MariaDB (version 11.7).
-- Qdrant (for vector search).
+- Qdrant (version 1.13.0).
 - An OpenAI-compatible API.
 - Escruta Extractor service running (see [Escruta Extractor](https://github.com/escruta/extractor)).
 
@@ -19,7 +19,7 @@ Built with Java 21, Spring Boot 3.5, Spring AI, MariaDB, and Lombok.
 > You can use Docker to quickly spin up both MariaDB and Qdrant:
 > ```bash
 > docker run -d --name escruta-db -p 3306:3306 -e MARIADB_ROOT_PASSWORD=1234 -e MARIADB_DATABASE=escruta mariadb:11.7
-> docker run -d --name escruta-qdrant -p 6333:6333 -p 6334:6334 qdrant/qdrant
+> docker run -d --name escruta-vdb -p 6333:6333 -p 6334:6334 qdrant/qdrant:v1.13.0
 > ```
 
 ### Installation
