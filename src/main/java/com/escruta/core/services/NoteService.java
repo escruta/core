@@ -6,9 +6,11 @@ import com.escruta.core.dtos.note.NoteUpdateDTO;
 import com.escruta.core.dtos.note.NoteWithContentDTO;
 import com.escruta.core.entities.Note;
 import com.escruta.core.entities.Notebook;
+import com.escruta.core.entities.Folder;
 import com.escruta.core.mappers.NoteMapper;
 import com.escruta.core.repositories.NoteRepository;
 import com.escruta.core.repositories.NotebookRepository;
+import com.escruta.core.repositories.FolderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -21,6 +23,7 @@ import java.util.UUID;
 public class NoteService {
     private final NoteRepository noteRepository;
     private final NotebookRepository notebookRepository;
+    private final FolderRepository folderRepository;
     private final UserService userService;
     private final NoteMapper noteMapper;
 
@@ -58,8 +61,14 @@ public class NoteService {
                 return null;
             }
         }
+        
+        Folder folder = null;
+        if (newNoteDto.folderId() != null) {
+            folder = folderRepository.findById(newNoteDto.folderId()).orElse(null);
+        }
 
         Note note = noteMapper.toNote(newNoteDto, notebook, currentUser);
+        note.setFolder(folder);
         noteRepository.save(note);
         return new NoteResponseDTO(note);
     }
@@ -69,6 +78,11 @@ public class NoteService {
         if (noteOptional.isPresent()) {
             Note note = noteOptional.get();
             noteMapper.updateNoteFromDto(newNoteDto, note);
+            if (Boolean.TRUE.equals(newNoteDto.removeFolder())) {
+                note.setFolder(null);
+            } else if (newNoteDto.folderId() != null) {
+                note.setFolder(folderRepository.findById(newNoteDto.folderId()).orElse(note.getFolder()));
+            }
             noteRepository.save(note);
             return new NoteResponseDTO(note);
         }

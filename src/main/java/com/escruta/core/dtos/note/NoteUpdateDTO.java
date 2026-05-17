@@ -7,6 +7,8 @@ public record NoteUpdateDTO(
         @UUID
         @NotNull
         String id,
+        java.util.UUID folderId,
+        Boolean removeFolder,
         String icon,
         String title,
         String content

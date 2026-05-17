@@ -24,6 +24,17 @@ CREATE TABLE users
     password   varchar(255) NOT NULL
 );
 
+CREATE TABLE folders
+(
+    created_at datetime(6),
+    updated_at datetime(6),
+    id         uuid         NOT NULL PRIMARY KEY,
+    user_id    uuid         NOT NULL,
+    title      varchar(255) NOT NULL,
+    color      varchar(50),
+    CONSTRAINT fk_folders_users FOREIGN KEY (user_id) REFERENCES users (id)
+);
+
 CREATE TABLE notebooks
 (
     created_at datetime(6),
@@ -79,11 +90,13 @@ CREATE TABLE notes
     updated_at  datetime(6),
     id          uuid         NOT NULL PRIMARY KEY,
     notebook_id uuid         NULL,
+    folder_id   uuid         NULL,
     user_id     uuid         NOT NULL,
     source_id   uuid UNIQUE,
     content     longtext,
     icon        varchar(255),
     title       varchar(255) NOT NULL,
+    CONSTRAINT fk_notes_folders FOREIGN KEY (folder_id) REFERENCES folders (id),
     CONSTRAINT fk814tu72hqd3m67ramoipdr0qq FOREIGN KEY (notebook_id) REFERENCES notebooks (id),
     CONSTRAINT fkka3wrcqyt11gt9qyvbpkuah7 FOREIGN KEY (source_id) REFERENCES sources (id),
     CONSTRAINT fk_notes_users FOREIGN KEY (user_id) REFERENCES users (id)

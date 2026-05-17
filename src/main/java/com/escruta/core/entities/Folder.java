@@ -11,38 +11,23 @@ import java.util.UUID;
 
 @Getter
 @Setter
-@Table(name = "notes")
+@Table(name = "folders")
 @Entity
-public class Note {
+public class Folder {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(nullable = false)
     private UUID id;
 
     @ManyToOne
-    @JoinColumn()
-    private Notebook notebook;
-
-    @ManyToOne
-    @JoinColumn()
-    private Folder folder;
-
-    @ManyToOne
     @JoinColumn(nullable = false)
     private User user;
-
-    @OneToOne
-    @JoinColumn()
-    private Source source;
-
-    @Column()
-    private String icon;
 
     @Column(nullable = false)
     private String title;
 
-    @Column(columnDefinition = "TEXT")
-    private String content;
+    @Column()
+    private String color;
 
     @CreationTimestamp
     @Column(updatable = false)
@@ -51,13 +36,4 @@ public class Note {
     @UpdateTimestamp
     @Column()
     private Timestamp updatedAt;
-
-    @PrePersist
-    @PreUpdate
-    @PreRemove
-    private void touchNotebook() {
-        if (notebook != null) {
-            notebook.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
-        }
-    }
 }
