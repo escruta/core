@@ -12,7 +12,9 @@ public record ChatReplyMessage(
 
     public record CitedSource(
             UUID id,
-            String title
+            UUID documentId,
+            String title,
+            String text
     ) {
     }
 }

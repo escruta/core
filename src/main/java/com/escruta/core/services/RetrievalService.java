@@ -1,7 +1,6 @@
 package com.escruta.core.services;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.ai.document.Document;
@@ -18,7 +17,7 @@ import java.util.UUID;
 public class RetrievalService {
     private final VectorStore vectorStore;
 
-    public QuestionAnswerAdvisor getQuestionAnswerAdvisor(UUID notebookId, List<UUID> selectedSourceIds) {
+    public CustomQuestionAnswerAdvisor getQuestionAnswerAdvisor(UUID notebookId, List<UUID> selectedSourceIds) {
         Filter.Expression notebookFilter = new Filter.Expression(
                 Filter.ExpressionType.EQ,
                 new Filter.Key("notebookId"),
@@ -39,7 +38,7 @@ public class RetrievalService {
             finalFilter = new Filter.Expression(Filter.ExpressionType.AND, notebookFilter, sourceFilter);
         }
 
-        return QuestionAnswerAdvisor
+        return CustomQuestionAnswerAdvisor
                 .builder(vectorStore)
                 .searchRequest(SearchRequest
                         .builder()

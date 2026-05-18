@@ -11,8 +11,8 @@ import com.escruta.core.services.SourceService;
 import com.escruta.core.services.RetrievalService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
+import com.escruta.core.services.CustomQuestionAnswerAdvisor;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
@@ -36,7 +36,8 @@ class ChatController {
             2. Write in a natural, conversational tone
             3. Use simple formatting only: **bold**, *italic*, `code`
             4. Focus on directly answering the user's question with the information from the sources
-            5. For mathematical expressions, ALWAYS use LaTeX format with dollar signs:
+            5. ALWAYS cite the sources directly in your response text. When using information from a source, add an inline citation using the exact format: [source_sourceId] where sourceId is the ID of the document you are referencing. For example: [source_123e4567-e89b-12d3-a456-426614174000]. Never use formats like [1] or [2]. Do not repeat the same citation consecutively.
+            6. For mathematical expressions, ALWAYS use LaTeX format with dollar signs:
                - Inline math: $...$ (e.g., $\\alpha$, $|0\\rangle$, $\\psi$)
                - Block math: $$...$$ (e.g., $$|\\psi\\rangle = \\alpha|0\\rangle + \\beta|1\\rangle$$)
                - NEVER use parentheses like (\\alpha) or (|0\\rangle)
@@ -305,18 +306,16 @@ class ChatController {
 
         List<Document> documents = chatResponse
                 .getMetadata()
-                .getOrDefault(QuestionAnswerAdvisor.RETRIEVED_DOCUMENTS, List.of());
+                .getOrDefault(CustomQuestionAnswerAdvisor.RETRIEVED_DOCUMENTS, List.of());
 
         List<ChatReplyMessage.CitedSource> citedSources = documents
                 .stream()
                 .map(doc -> new ChatReplyMessage.CitedSource(
-                        UUID.fromString(doc
-                                .getMetadata()
-                                .get("sourceId")
-                                .toString()),
-                        doc.getMetadata().get("title").toString()
+                        UUID.fromString(doc.getId()),
+                        UUID.fromString(doc.getMetadata().get("sourceId").toString()),
+                        doc.getMetadata().get("title").toString(),
+                        doc.getText()
                 ))
-                .distinct()
                 .toList();
 
         return ResponseEntity.ok(new ChatReplyMessage(
