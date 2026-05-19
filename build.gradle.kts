@@ -17,9 +17,9 @@ java {
 }
 
 flyway {
-    url = System.getenv("ESCRUTA_DATABASE_URL") ?: "jdbc:mariadb://localhost:3306/escruta"
-    user = System.getenv("ESCRUTA_DATABASE_USER") ?: "root"
-    password = System.getenv("ESCRUTA_DATABASE_PASSWORD") ?: "1234"
+    url = System.getenv("ESCRUTA_DB_URL") ?: "jdbc:mariadb://localhost:3306/escruta"
+    user = System.getenv("ESCRUTA_DB_USER") ?: "root"
+    password = System.getenv("ESCRUTA_DB_PASSWORD") ?: "1234"
 }
 
 repositories {

@@ -12,9 +12,9 @@ spring:
       max-request-size: 50MB
       enabled: true
   datasource:
-    url: ${ESCRUTA_DATABASE_URL:jdbc:mariadb://localhost:3306/escruta}
-    username: ${ESCRUTA_DATABASE_USER:root}
-    password: ${ESCRUTA_DATABASE_PASSWORD:1234}
+    url: ${ESCRUTA_DB_URL:jdbc:mariadb://localhost:3306/escruta}
+    username: ${ESCRUTA_DB_USER:root}
+    password: ${ESCRUTA_DB_PASSWORD:1234}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -24,9 +24,9 @@ spring:
     baseline-on-migrate: true
   data:
     redis:
-      host: ${ESCRUTA_REDIS_HOST:localhost}
-      port: ${ESCRUTA_REDIS_PORT:6379}
-      password: ${ESCRUTA_REDIS_PASSWORD:}
+      host: ${ESCRUTA_KV_HOST:localhost}
+      port: ${ESCRUTA_KV_PORT:6379}
+      password: ${ESCRUTA_KV_PASSWORD:}
     jdbc:
       dialect: maria
   ai:
@@ -55,11 +55,11 @@ spring:
     vectorstore:
       qdrant:
         initialize-schema: true
-        host: ${ESCRUTA_QDRANT_HOST:localhost}
-        port: ${ESCRUTA_QDRANT_PORT:6334}
-        api-key: ${ESCRUTA_QDRANT_API_KEY}
-        collection-name: ${ESCRUTA_QDRANT_COLLECTION:escruta}
-        use-tls: ${ESCRUTA_QDRANT_USE_TLS:false}
+        host: ${ESCRUTA_VDB_HOST:localhost}
+        port: ${ESCRUTA_VDB_PORT:6334}
+        api-key: ${ESCRUTA_VDB_API_KEY}
+        collection-name: ${ESCRUTA_VDB_COLLECTION:escruta}
+        use-tls: ${ESCRUTA_VDB_USE_TLS:false}
     retry:
       exclude-on-http-codes: 429
 logging:

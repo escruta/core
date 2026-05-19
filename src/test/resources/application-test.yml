@@ -35,8 +35,8 @@ spring:
         api-key: "dummy-api-key"
     vectorstore:
       qdrant:
-        host: ${ESCRUTA_QDRANT_HOST:localhost}
-        port: ${ESCRUTA_QDRANT_PORT:6334}
+        host: ${ESCRUTA_VDB_HOST:localhost}
+        port: ${ESCRUTA_VDB_PORT:6334}
         collection-name: escruta_test
         initialize-schema: false
 

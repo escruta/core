@@ -40,12 +40,12 @@ application at runtime.
 | Variable                           | Description                          | Default                                 |
 |------------------------------------|--------------------------------------|-----------------------------------------|
 | `ESCRUTA_PORT`                     | Backend port                         | `8080`                                  |
-| `ESCRUTA_DATABASE_URL`             | JDBC URL for the database            | `jdbc:mariadb://localhost:3306/escruta` |
-| `ESCRUTA_DATABASE_USER`            | Database username                    | `root`                                  |
-| `ESCRUTA_DATABASE_PASSWORD`        | Database password                    | `1234`                                  |
-| `ESCRUTA_REDIS_HOST`               | Redis database host                  | `localhost`                             |
-| `ESCRUTA_REDIS_PORT`               | Redis database port                  | `6379`                                  |
-| `ESCRUTA_REDIS_PASSWORD`           | Redis database password              |                                         |
+| `ESCRUTA_DB_URL`                   | JDBC URL for the database            | `jdbc:mariadb://localhost:3306/escruta` |
+| `ESCRUTA_DB_USER`                  | Database username                    | `root`                                  |
+| `ESCRUTA_DB_PASSWORD`              | Database password                    | `1234`                                  |
+| `ESCRUTA_KV_HOST`                  | Redis database host                  | `localhost`                             |
+| `ESCRUTA_KV_PORT`                  | Redis database port                  | `6379`                                  |
+| `ESCRUTA_KV_PASSWORD`              | Redis database password              |                                         |
 | `ESCRUTA_AI_BASE_URL`              | Base URL for the AI provider         | (Required)                              |
 | `ESCRUTA_AI_API_KEY`               | API Key for the AI provider          | (Required)                              |
 | `ESCRUTA_AI_MODEL`                 | AI model to use for chat             | (Required)                              |
@@ -55,10 +55,10 @@ application at runtime.
 | `ESCRUTA_AI_EMBEDDING_PATH`        | Path for embeddings endpoint         | `/v1/embeddings`                        |
 | `ESCRUTA_AI_EMBEDDING_BASE_URL`    | Base URL for embeddings (if differs) | `ESCRUTA_AI_BASE_URL`                   |
 | `ESCRUTA_AI_EMBEDDING_API_KEY`     | API Key for embeddings (if differs)  | `ESCRUTA_AI_API_KEY`                    |
-| `ESCRUTA_QDRANT_HOST`              | Qdrant database host                 | `localhost`                             |
-| `ESCRUTA_QDRANT_PORT`              | Qdrant database port                 | `6334`                                  |
-| `ESCRUTA_QDRANT_API_KEY`           | API Key for Qdrant (if required)     |                                         |
-| `ESCRUTA_QDRANT_COLLECTION`        | Qdrant collection name               | `escruta`                               |
+| `ESCRUTA_VDB_HOST`                 | Qdrant database host                 | `localhost`                             |
+| `ESCRUTA_VDB_PORT`                 | Qdrant database port                 | `6334`                                  |
+| `ESCRUTA_VDB_API_KEY`              | API Key for Qdrant (if required)     |                                         |
+| `ESCRUTA_VDB_COLLECTION`           | Qdrant collection name               | `escruta`                               |
 | `ESCRUTA_CORS_ALLOWED_ORIGINS`     | Allowed origins for CORS             | `http://localhost:5173`                 |
 | `ESCRUTA_EXTRACTOR_URL`            | Extractor service URL                | `http://localhost:8000`                 |
 | `ESCRUTA_EXTRACTOR_API_KEY`        | Internal API Key for the Extractor   | (Required)                              |
@@ -84,7 +84,7 @@ database.
 ### Managing Migrations via CLI
 
 You can use the Flyway Gradle plugin to manage the database schema manually. The database credentials will be picked up
-from your environment variables (`ESCRUTA_DATABASE_URL`, `ESCRUTA_DATABASE_USER`, `ESCRUTA_DATABASE_PASSWORD`).
+from your environment variables (`ESCRUTA_DB_URL`, `ESCRUTA_DB_USER`, `ESCRUTA_DB_PASSWORD`).
 
 ```bash
 ./gradlew flywayInfo        # View migration status
