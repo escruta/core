@@ -90,11 +90,11 @@ public class SecurityConfiguration {
                     .orElseThrow(() -> new BadCredentialsException("Invalid or expired token"));
 
             Map<String, Object> attributes = new HashMap<>();
-            attributes.put("sub", accessToken.getEmail());
+            attributes.put("sub", accessToken.getUserId().toString());
             attributes.put("active", true);
 
             return new DefaultOAuth2AuthenticatedPrincipal(
-                    accessToken.getEmail(),
+                    accessToken.getUserId().toString(),
                     attributes,
                     Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"))
             );

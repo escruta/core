@@ -43,8 +43,9 @@ public class UserService {
         }
 
         if (authentication.getPrincipal() instanceof OAuth2AuthenticatedPrincipal principal) {
-            String email = principal.getAttribute("sub");
-            return userRepository.findByEmail(email).orElse(null);
+            String userId = principal.getAttribute("sub");
+            assert userId != null;
+            return userRepository.findById(UUID.fromString(userId)).orElse(null);
         }
 
         return null;
@@ -90,7 +91,7 @@ public class UserService {
             throw new BadCredentialsException("User not authenticated");
         }
         var notebookIds = currentUser.getNotebooks().stream().map(Notebook::getId).toList();
-        accessTokenRepository.deleteByEmail(currentUser.getEmail());
+        accessTokenRepository.deleteByUserId(currentUser.getId());
         userRepository.delete(currentUser);
         eventPublisher.publishEvent(new UserDeletedEvent(this, notebookIds));
     }

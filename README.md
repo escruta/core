@@ -12,14 +12,16 @@ Built with Java 21, Spring Boot 3.5, Spring AI, MariaDB, and Lombok.
 - Java Development Kit (JDK) 21 or higher.
 - MariaDB (version 11.7).
 - Qdrant (version 1.13.0).
+- Redis.
 - An OpenAI-compatible API.
 - Escruta Extractor service running (see [Escruta Extractor](https://github.com/escruta/extractor)).
 
 > [!TIP]
-> You can use Docker to quickly spin up both MariaDB and Qdrant:
+> You can use Docker to quickly spin up MariaDB, Qdrant, and Redis:
 > ```bash
 > docker run -d --name escruta-db -p 3306:3306 -e MARIADB_ROOT_PASSWORD=1234 -e MARIADB_DATABASE=escruta mariadb:11.7
 > docker run -d --name escruta-vdb -p 6333:6333 -p 6334:6334 qdrant/qdrant:v1.13.0
+> docker run -d --name escruta-kv -p 6379:6379 redis:latest
 > ```
 
 ### Installation
@@ -41,6 +43,9 @@ application at runtime.
 | `ESCRUTA_DATABASE_URL`             | JDBC URL for the database            | `jdbc:mariadb://localhost:3306/escruta` |
 | `ESCRUTA_DATABASE_USER`            | Database username                    | `root`                                  |
 | `ESCRUTA_DATABASE_PASSWORD`        | Database password                    | `1234`                                  |
+| `ESCRUTA_REDIS_HOST`               | Redis database host                  | `localhost`                             |
+| `ESCRUTA_REDIS_PORT`               | Redis database port                  | `6379`                                  |
+| `ESCRUTA_REDIS_PASSWORD`           | Redis database password              |                                         |
 | `ESCRUTA_AI_BASE_URL`              | Base URL for the AI provider         | (Required)                              |
 | `ESCRUTA_AI_API_KEY`               | API Key for the AI provider          | (Required)                              |
 | `ESCRUTA_AI_MODEL`                 | AI model to use for chat             | (Required)                              |

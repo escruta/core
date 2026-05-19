@@ -53,14 +53,18 @@ class AuthenticationControllerTest {
         loginDto.setEmail("test@example.com");
         loginDto.setPassword("Password123");
 
+        User mockUser = new User();
+        mockUser.setId(java.util.UUID.randomUUID());
+        mockUser.setEmail("test@example.com");
+
         Authentication authentication = mock(Authentication.class);
-        when(authentication.getName()).thenReturn("test@example.com");
+        when(authentication.getPrincipal()).thenReturn(mockUser);
         when(authenticationManager.authenticate(any())).thenReturn(authentication);
 
         AccessToken accessToken = new AccessToken();
         accessToken.setToken("test-token-123");
         accessToken.setExpiresAt(java.time.Instant.now().plusSeconds(3600));
-        when(tokenService.createToken("test@example.com")).thenReturn(accessToken);
+        when(tokenService.createToken(mockUser.getId())).thenReturn(accessToken);
 
         mockMvc
                 .perform(post("/login")
@@ -121,19 +125,20 @@ class AuthenticationControllerTest {
         registerDto.setName("New User");
 
         User registeredUser = new User();
+        registeredUser.setId(java.util.UUID.randomUUID());
         registeredUser.setEmail("newuser@example.com");
         registeredUser.setName("New User");
 
         when(userService.register(any())).thenReturn(registeredUser);
 
         Authentication authentication = mock(Authentication.class);
-        when(authentication.getName()).thenReturn("newuser@example.com");
+        when(authentication.getPrincipal()).thenReturn(registeredUser);
         when(authenticationManager.authenticate(any())).thenReturn(authentication);
 
         AccessToken accessToken = new AccessToken();
         accessToken.setToken("new-token-123");
         accessToken.setExpiresAt(java.time.Instant.now().plusSeconds(3600));
-        when(tokenService.createToken("newuser@example.com")).thenReturn(accessToken);
+        when(tokenService.createToken(registeredUser.getId())).thenReturn(accessToken);
 
         mockMvc
                 .perform(post("/register")
@@ -191,8 +196,9 @@ class AuthenticationControllerTest {
     @Test
     @DisplayName("Should introspect token and return active true")
     void introspect_shouldReturnActiveWhenTokenValid() throws Exception {
+        java.util.UUID testUserId = java.util.UUID.randomUUID();
         AccessToken accessToken = new AccessToken();
-        accessToken.setEmail("test@example.com");
+        accessToken.setUserId(testUserId);
         accessToken.setExpiresAt(java.time.Instant.now().plusSeconds(3600));
 
         when(tokenService.validateToken("valid-token")).thenReturn(Optional.of(accessToken));
@@ -201,7 +207,7 @@ class AuthenticationControllerTest {
                 .perform(post("/introspect").param("token", "valid-token"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.active").value(true))
-                .andExpect(jsonPath("$.sub").value("test@example.com"));
+                .andExpect(jsonPath("$.sub").value(testUserId.toString()));
     }
 
     @Test

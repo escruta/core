@@ -1,10 +1,3 @@
-CREATE TABLE access_tokens
-(
-    expires_at timestamp(6) NOT NULL,
-    email      varchar(255) NOT NULL,
-    token      varchar(255) NOT NULL PRIMARY KEY
-);
-
 CREATE TABLE conversations
 (
     created_at  datetime(6),

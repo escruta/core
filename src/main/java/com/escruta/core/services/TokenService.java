@@ -12,7 +12,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.time.Instant;
 import java.util.Base64;
 import java.util.Optional;
 
@@ -27,7 +26,7 @@ public class TokenService {
     private int sessionExpirationIntervalSeconds;
 
     @Transactional
-    public AccessToken createToken(String email) {
+    public AccessToken createToken(java.util.UUID userId) {
         byte[] randomBytes = new byte[32];
         secureRandom.nextBytes(randomBytes);
 
@@ -36,8 +35,9 @@ public class TokenService {
 
         AccessToken accessToken = new AccessToken();
         accessToken.setToken(hashedToken);
-        accessToken.setEmail(email);
-        accessToken.setExpiresAt(Instant.now().plusSeconds(this.sessionExpirationIntervalSeconds));
+        accessToken.setUserId(userId);
+        accessToken.setExpiresAt(java.time.Instant.now().plusSeconds(this.sessionExpirationIntervalSeconds));
+        accessToken.setTimeToLive((long) this.sessionExpirationIntervalSeconds);
 
         accessTokenRepository.save(accessToken);
         accessToken.setToken(rawToken);
@@ -46,7 +46,9 @@ public class TokenService {
 
     public Optional<AccessToken> validateToken(String rawToken) {
         String hashedToken = hashToken(rawToken);
-        return accessTokenRepository.findByToken(hashedToken).filter(t -> t.getExpiresAt().isAfter(Instant.now()));
+        return accessTokenRepository
+                .findById(hashedToken)
+                .filter(t -> t.getExpiresAt().isAfter(java.time.Instant.now()));
     }
 
     @Transactional

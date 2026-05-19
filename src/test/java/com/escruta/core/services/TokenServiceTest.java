@@ -29,7 +29,7 @@ class TokenServiceTest {
     private TokenService tokenService;
 
     private static final int SESSION_EXPIRATION_SECONDS = 3600;
-    private static final String TEST_EMAIL = "test@example.com";
+    private static final java.util.UUID TEST_USER_ID = java.util.UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
@@ -41,10 +41,10 @@ class TokenServiceTest {
     void createToken_shouldCreateTokenWithCorrectProperties() {
         when(accessTokenRepository.save(any(AccessToken.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        AccessToken result = tokenService.createToken(TEST_EMAIL);
+        AccessToken result = tokenService.createToken(TEST_USER_ID);
 
         assertThat(result).isNotNull();
-        assertThat(result.getEmail()).isEqualTo(TEST_EMAIL);
+        assertThat(result.getUserId()).isEqualTo(TEST_USER_ID);
         assertThat(result.getToken()).isNotNull().isNotEmpty();
         assertThat(result.getExpiresAt()).isAfter(Instant.now());
         assertThat(result.getExpiresAt()).isBefore(Instant.now().plusSeconds(SESSION_EXPIRATION_SECONDS + 1));
@@ -54,7 +54,7 @@ class TokenServiceTest {
         verify(accessTokenRepository, times(1)).save(tokenCaptor.capture());
 
         AccessToken savedToken = tokenCaptor.getValue();
-        assertThat(savedToken.getEmail()).isEqualTo(TEST_EMAIL);
+        assertThat(savedToken.getUserId()).isEqualTo(TEST_USER_ID);
         assertThat(savedToken.getExpiresAt()).isNotNull();
     }
 
@@ -63,8 +63,8 @@ class TokenServiceTest {
     void createToken_shouldCreateDifferentTokensOnEachCall() {
         when(accessTokenRepository.save(any(AccessToken.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        AccessToken token1 = tokenService.createToken(TEST_EMAIL);
-        AccessToken token2 = tokenService.createToken(TEST_EMAIL);
+        AccessToken token1 = tokenService.createToken(TEST_USER_ID);
+        AccessToken token2 = tokenService.createToken(TEST_USER_ID);
 
         assertThat(token1.getToken()).isNotEqualTo(token2.getToken());
     }
@@ -73,30 +73,30 @@ class TokenServiceTest {
     @DisplayName("Should validate existing and non-expired token")
     void validateToken_shouldReturnTokenWhenExistsAndNotExpired() {
         AccessToken accessToken = new AccessToken();
-        accessToken.setEmail(TEST_EMAIL);
+        accessToken.setUserId(TEST_USER_ID);
         accessToken.setToken("hashedToken");
         accessToken.setExpiresAt(Instant.now().plusSeconds(100));
 
-        when(accessTokenRepository.findByToken(any())).thenReturn(Optional.of(accessToken));
+        when(accessTokenRepository.findById(any())).thenReturn(Optional.of(accessToken));
 
-        AccessToken createdToken = tokenService.createToken(TEST_EMAIL);
+        AccessToken createdToken = tokenService.createToken(TEST_USER_ID);
         Optional<AccessToken> result = tokenService.validateToken(createdToken.getToken());
 
         assertThat(result).isPresent();
-        assertThat(result.get().getEmail()).isEqualTo(TEST_EMAIL);
+        assertThat(result.get().getUserId()).isEqualTo(TEST_USER_ID);
     }
 
     @Test
     @DisplayName("Should return empty when token is expired")
     void validateToken_shouldReturnEmptyWhenTokenIsExpired() {
         AccessToken expiredToken = new AccessToken();
-        expiredToken.setEmail(TEST_EMAIL);
+        expiredToken.setUserId(TEST_USER_ID);
         expiredToken.setToken("hashedToken");
         expiredToken.setExpiresAt(Instant.now().minusSeconds(100));
 
-        when(accessTokenRepository.findByToken(any())).thenReturn(Optional.of(expiredToken));
+        when(accessTokenRepository.findById(any())).thenReturn(Optional.of(expiredToken));
 
-        AccessToken createdToken = tokenService.createToken(TEST_EMAIL);
+        AccessToken createdToken = tokenService.createToken(TEST_USER_ID);
         Optional<AccessToken> result = tokenService.validateToken(createdToken.getToken());
 
         assertThat(result).isEmpty();
@@ -105,7 +105,7 @@ class TokenServiceTest {
     @Test
     @DisplayName("Should return empty when token does not exist")
     void validateToken_shouldReturnEmptyWhenTokenDoesNotExist() {
-        when(accessTokenRepository.findByToken(any())).thenReturn(Optional.empty());
+        when(accessTokenRepository.findById(any())).thenReturn(Optional.empty());
 
         Optional<AccessToken> result = tokenService.validateToken("nonExistentToken123");
 
@@ -125,8 +125,8 @@ class TokenServiceTest {
     void hashToken_shouldBeConsistent() {
         when(accessTokenRepository.save(any(AccessToken.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        AccessToken token1 = tokenService.createToken(TEST_EMAIL);
-        AccessToken token2 = tokenService.createToken(TEST_EMAIL);
+        AccessToken token1 = tokenService.createToken(TEST_USER_ID);
+        AccessToken token2 = tokenService.createToken(TEST_USER_ID);
 
         assertThat(token1.getToken()).isNotEqualTo(token2.getToken());
     }

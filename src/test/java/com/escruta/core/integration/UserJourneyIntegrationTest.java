@@ -66,7 +66,7 @@ class UserJourneyIntegrationTest {
                 .perform(post("/introspect").param("token", authToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.active").value(true))
-                .andExpect(jsonPath("$.sub").value(userEmail));
+                .andExpect(jsonPath("$.sub").exists());
     }
 
     @Test

@@ -79,8 +79,8 @@ class UserServiceTest {
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getPrincipal()).thenReturn(principal);
-        when(principal.getAttribute("sub")).thenReturn(TEST_EMAIL);
-        when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(user));
+        when(principal.getAttribute("sub")).thenReturn(user.getId().toString());
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
 
         UUID result = userService.getUserId();
 
@@ -117,8 +117,8 @@ class UserServiceTest {
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getPrincipal()).thenReturn(principal);
-        when(principal.getAttribute("sub")).thenReturn(TEST_EMAIL);
-        when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(user));
+        when(principal.getAttribute("sub")).thenReturn(user.getId().toString());
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
 
         User result = userService.getCurrentUser();
 
@@ -182,8 +182,8 @@ class UserServiceTest {
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getPrincipal()).thenReturn(principal);
-        when(principal.getAttribute("sub")).thenReturn(TEST_EMAIL);
-        when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(user));
+        when(principal.getAttribute("sub")).thenReturn(user.getId().toString());
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
 
         userService.changeName(newName);
 
@@ -217,8 +217,8 @@ class UserServiceTest {
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getPrincipal()).thenReturn(principal);
-        when(principal.getAttribute("sub")).thenReturn(TEST_EMAIL);
-        when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(user));
+        when(principal.getAttribute("sub")).thenReturn(user.getId().toString());
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
         when(passwordEncoder.matches(dto.getCurrentPassword(), user.getPassword())).thenReturn(true);
         when(passwordEncoder.encode(dto.getNewPassword())).thenReturn("newEncodedPassword");
 
@@ -242,8 +242,8 @@ class UserServiceTest {
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getPrincipal()).thenReturn(principal);
-        when(principal.getAttribute("sub")).thenReturn(TEST_EMAIL);
-        when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(user));
+        when(principal.getAttribute("sub")).thenReturn(user.getId().toString());
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
         when(passwordEncoder.matches(dto.getCurrentPassword(), user.getPassword())).thenReturn(false);
 
         assertThatThrownBy(() -> userService.changePassword(dto))
@@ -262,12 +262,12 @@ class UserServiceTest {
         when(securityContext.getAuthentication()).thenReturn(authentication);
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getPrincipal()).thenReturn(principal);
-        when(principal.getAttribute("sub")).thenReturn(TEST_EMAIL);
-        when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(user));
+        when(principal.getAttribute("sub")).thenReturn(user.getId().toString());
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
 
         userService.deleteAccount();
 
-        verify(accessTokenRepository).deleteByEmail(TEST_EMAIL);
+        verify(accessTokenRepository).deleteByUserId(user.getId());
         verify(userRepository).delete(user);
         verify(eventPublisher).publishEvent(any(com.escruta.core.events.UserDeletedEvent.class));
     }
@@ -281,7 +281,7 @@ class UserServiceTest {
                 .isInstanceOf(BadCredentialsException.class)
                 .hasMessageContaining("not authenticated");
 
-        verify(accessTokenRepository, never()).deleteByEmail(any());
+        verify(accessTokenRepository, never()).deleteByUserId(any());
         verify(userRepository, never()).delete(any());
     }
 

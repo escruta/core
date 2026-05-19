@@ -23,6 +23,10 @@ spring:
     enabled: true
     baseline-on-migrate: true
   data:
+    redis:
+      host: ${ESCRUTA_REDIS_HOST:localhost}
+      port: ${ESCRUTA_REDIS_PORT:6379}
+      password: ${ESCRUTA_REDIS_PASSWORD:}
     jdbc:
       dialect: maria
   ai:

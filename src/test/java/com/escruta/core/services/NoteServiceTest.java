@@ -134,7 +134,7 @@ class NoteServiceTest {
     @Test
     @DisplayName("Should add note to notebook successfully")
     void addNote_shouldAddNoteToNotebookSuccessfully() {
-        NoteCreationDTO dto = new NoteCreationDTO(NOTEBOOK_ID, "📄", "New Note", "New Content");
+        NoteCreationDTO dto = new NoteCreationDTO(NOTEBOOK_ID, null, "📄", "New Note", "New Content");
         Notebook notebook = createNotebook();
         User user = createUser();
         Note note = createNote(NOTE_ID, "New Note", "New Content", notebook);
@@ -155,7 +155,7 @@ class NoteServiceTest {
     @Test
     @DisplayName("Should add standalone note successfully")
     void addNote_shouldAddStandaloneNoteSuccessfully() {
-        NoteCreationDTO dto = new NoteCreationDTO(null, "📄", "New Note", "New Content");
+        NoteCreationDTO dto = new NoteCreationDTO(null, null, "📄", "New Note", "New Content");
         User user = createUser();
         Note note = createNote(NOTE_ID, "New Note", "New Content", null);
         note.setUser(user);
@@ -174,7 +174,7 @@ class NoteServiceTest {
     @Test
     @DisplayName("Should return null when adding note to non-existent notebook")
     void addNote_shouldReturnNullWhenNotebookNotFound() {
-        NoteCreationDTO dto = new NoteCreationDTO(NOTEBOOK_ID, "📄", "New Note", "New Content");
+        NoteCreationDTO dto = new NoteCreationDTO(NOTEBOOK_ID, null, "📄", "New Note", "New Content");
         User user = createUser();
 
         when(userService.getCurrentUser()).thenReturn(user);
@@ -189,7 +189,7 @@ class NoteServiceTest {
     @Test
     @DisplayName("Should return null when user is not authenticated on add")
     void addNote_shouldReturnNullWhenUserNotAuthenticated() {
-        NoteCreationDTO dto = new NoteCreationDTO(NOTEBOOK_ID, "📄", "New Note", "New Content");
+        NoteCreationDTO dto = new NoteCreationDTO(NOTEBOOK_ID, null, "📄", "New Note", "New Content");
 
         when(userService.getCurrentUser()).thenReturn(null);
 
@@ -204,7 +204,7 @@ class NoteServiceTest {
     @DisplayName("Should update note successfully")
     void updateNote_shouldUpdateNoteSuccessfully() {
         String noteIdStr = NOTE_ID.toString();
-        NoteUpdateDTO dto = new NoteUpdateDTO(noteIdStr, "📄", "Updated Note", "Updated Content");
+        NoteUpdateDTO dto = new NoteUpdateDTO(noteIdStr, null, null, "📄", "Updated Note", "Updated Content");
         Notebook notebook = createNotebook();
         Note existingNote = createNote(NOTE_ID, "Old Note", "Old Content", notebook);
         existingNote.setUser(createUser());
@@ -222,7 +222,7 @@ class NoteServiceTest {
     @DisplayName("Should return null when updating non-existent note")
     void updateNote_shouldReturnNullWhenNoteNotFound() {
         String noteIdStr = NOTE_ID.toString();
-        NoteUpdateDTO dto = new NoteUpdateDTO(noteIdStr, "📄", "Updated Note", "Updated Content");
+        NoteUpdateDTO dto = new NoteUpdateDTO(noteIdStr, null, null, "📄", "Updated Note", "Updated Content");
 
         when(noteRepository.findById(NOTE_ID)).thenReturn(Optional.empty());
 

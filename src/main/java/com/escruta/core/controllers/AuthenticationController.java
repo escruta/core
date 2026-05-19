@@ -34,16 +34,18 @@ public class AuthenticationController {
     @PostMapping("/login")
     public ResponseEntity<AccessTokenResponse> login(@Valid @RequestBody LoginUserDto loginUserDto) {
         var authentication = this.authenticate(loginUserDto.getEmail(), loginUserDto.getPassword());
-        return ResponseEntity.ok(new AccessTokenResponse(tokenService.createToken(authentication.getName())));
+        var user = (com.escruta.core.entities.User) authentication.getPrincipal();
+        return ResponseEntity.ok(new AccessTokenResponse(tokenService.createToken(user.getId())));
     }
 
     @PostMapping("/register")
     public ResponseEntity<AccessTokenResponse> register(@Valid @RequestBody RegisterUserDto registerUserDto) {
         var registeredUser = userService.register(registerUserDto);
         var authentication = this.authenticate(registeredUser.getEmail(), registerUserDto.getPassword());
+        var user = (com.escruta.core.entities.User) authentication.getPrincipal();
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(new AccessTokenResponse(tokenService.createToken(authentication.getName())));
+                .body(new AccessTokenResponse(tokenService.createToken(user.getId())));
     }
 
     @PostMapping("/introspect")
@@ -53,7 +55,7 @@ public class AuthenticationController {
                 .map(t -> ResponseEntity.ok(Map.<String, Object>of("active",
                         true,
                         "sub",
-                        t.getEmail(),
+                        t.getUserId(),
                         "exp",
                         t.getExpiresAt().getEpochSecond()
                 )))
