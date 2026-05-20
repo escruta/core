@@ -10,7 +10,6 @@ public record NoteResponseDTO(
         UUID notebookId,
         UUID folderId,
         UUID sourceId,
-        String icon,
         String title,
         Timestamp createdAt,
         Timestamp updatedAt
@@ -27,7 +26,6 @@ public record NoteResponseDTO(
                 note.getSource() != null ?
                         note.getSource().getId() :
                         null,
-                note.getIcon(),
                 note.getTitle(),
                 note.getCreatedAt(),
                 note.getUpdatedAt()

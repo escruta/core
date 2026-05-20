@@ -35,9 +35,6 @@ public class Note {
     @JoinColumn()
     private Source source;
 
-    @Column()
-    private String icon;
-
     @Column(nullable = false)
     private String title;
 

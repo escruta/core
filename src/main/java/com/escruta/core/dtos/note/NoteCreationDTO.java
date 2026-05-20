@@ -7,7 +7,6 @@ import java.util.UUID;
 public record NoteCreationDTO(
         UUID notebookId,
         UUID folderId,
-        String icon,
         @NotBlank
         String title,
         String content

@@ -87,7 +87,6 @@ CREATE TABLE notes
     user_id     uuid         NOT NULL,
     source_id   uuid UNIQUE,
     content     longtext,
-    icon        varchar(255),
     title       varchar(255) NOT NULL,
     CONSTRAINT fk_notes_folders FOREIGN KEY (folder_id) REFERENCES folders (id),
     CONSTRAINT fk814tu72hqd3m67ramoipdr0qq FOREIGN KEY (notebook_id) REFERENCES notebooks (id),

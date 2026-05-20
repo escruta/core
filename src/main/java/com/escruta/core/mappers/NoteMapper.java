@@ -13,15 +13,12 @@ public class NoteMapper {
         Note note = new Note();
         note.setNotebook(notebook);
         note.setUser(user);
-        note.setIcon(dto.icon());
         note.setTitle(dto.title());
         note.setContent(dto.content());
         return note;
     }
 
     public void updateNoteFromDto(NoteUpdateDTO dto, Note note) {
-        if (dto.icon() != null)
-            note.setIcon(dto.icon());
         if (dto.title() != null)
             note.setTitle(dto.title());
         if (dto.content() != null)

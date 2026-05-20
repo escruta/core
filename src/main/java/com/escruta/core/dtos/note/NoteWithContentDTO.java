@@ -10,7 +10,6 @@ public record NoteWithContentDTO(
         UUID notebookId,
         UUID folderId,
         UUID sourceId,
-        String icon,
         String title,
         String content,
         Timestamp createdAt,
@@ -28,7 +27,6 @@ public record NoteWithContentDTO(
                 note.getSource() != null ?
                         note.getSource().getId() :
                         null,
-                note.getIcon(),
                 note.getTitle(),
                 note.getContent(),
                 note.getCreatedAt(),
