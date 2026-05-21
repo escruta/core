@@ -1,6 +1,6 @@
 # Agent Guidelines and Considerations
 
-When addressing any task in the `@core/` backend, you must thoroughly research how similar problems have been resolved
+When addressing any task in this backend, you must thoroughly research how similar problems have been resolved
 in other components across the codebase. For instance, always check existing implementations like
 `NotebookController.java` and `NotebookService.java` before attempting to resolve a related issue.
 
