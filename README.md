@@ -62,6 +62,8 @@ application at runtime.
 | `ESCRUTA_CORS_ALLOWED_ORIGINS`     | Allowed origins for CORS             | `http://localhost:5173`                 |
 | `ESCRUTA_EXTRACTOR_URL`            | Extractor service URL                | `http://localhost:8000`                 |
 | `ESCRUTA_EXTRACTOR_API_KEY`        | Internal API Key for the Extractor   | (Required)                              |
+| `ESCRUTA_SEARCH_URL`               | Search service URL                   | `http://localhost:8001`                 |
+| `ESCRUTA_SEARCH_API_KEY`           | Internal API Key for the Search      | (Required)                              |
 
 See [application.yml](./src/main/resources/application.yml) for the full list of configuration options.
 
