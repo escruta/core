@@ -15,6 +15,7 @@ Built with Java 21, Spring Boot 3.5, Spring AI, MariaDB, and Lombok.
 - Redis.
 - An OpenAI-compatible API.
 - Escruta Extractor service running (see [Escruta Extractor](https://github.com/escruta/extractor)).
+- Escruta Search service running (see [Escruta Search](https://github.com/escruta/search)).
 
 > [!TIP]
 > You can use Docker to quickly spin up MariaDB, Qdrant, and Redis:
