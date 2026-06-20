@@ -30,27 +30,47 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BadCredentialsException.class)
     public ProblemDetail handleBadCredentials() {
-        return createProblem(HttpStatus.UNAUTHORIZED, "Authentication failed", "The email or password is incorrect");
+        return createProblem(
+                HttpStatus.UNAUTHORIZED,
+                "Authentication failed",
+                "It seems something went wrong. Please try signing in again."
+        );
     }
 
     @ExceptionHandler({AccessDeniedException.class, SecurityException.class})
     public ProblemDetail handleForbidden(Exception ex) {
-        return createProblem(HttpStatus.FORBIDDEN, "Access denied", ex.getMessage());
+        return createProblem(
+                HttpStatus.FORBIDDEN,
+                "Access denied",
+                "You don't have permission to perform this action. Please contact support if you believe this is an error."
+        );
     }
 
     @ExceptionHandler(AccountStatusException.class)
     public ProblemDetail handleAccountStatus(AccountStatusException ex) {
-        return createProblem(HttpStatus.FORBIDDEN, ex.getMessage(), "The account is locked");
+        return createProblem(
+                HttpStatus.FORBIDDEN,
+                "Access denied",
+                "Your account access has been restricted. Please contact support for assistance."
+        );
     }
 
     @ExceptionHandler({NoResourceFoundException.class, EntityNotFoundException.class})
     public ProblemDetail handleNotFound(Exception ex) {
-        return createProblem(HttpStatus.NOT_FOUND, "Resource not found", ex.getMessage());
+        return createProblem(
+                HttpStatus.NOT_FOUND,
+                "Resource not found",
+                "The item you're looking for can't be found. Please check the URL or try a different search."
+        );
     }
 
     @ExceptionHandler({HttpMessageNotReadableException.class, IllegalArgumentException.class, IllegalStateException.class})
     public ProblemDetail handleBadRequest(Exception ex) {
-        return createProblem(HttpStatus.BAD_REQUEST, "Invalid request", ex.getMessage());
+        return createProblem(
+                HttpStatus.BAD_REQUEST,
+                "Invalid request",
+                "Something went wrong with your request. Please check your input and try again."
+        );
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -61,12 +81,20 @@ public class GlobalExceptionHandler {
                 .stream()
                 .map(f -> String.format("'%s' %s", f.getField(), f.getDefaultMessage()))
                 .collect(Collectors.joining(", "));
-        return createProblem(HttpStatus.BAD_REQUEST, "Validation error", errors);
+        return createProblem(
+                HttpStatus.BAD_REQUEST,
+                "Invalid request",
+                "Please fix the highlighted fields and try again."
+        );
     }
 
     @ExceptionHandler(TransientAiException.class)
     public ProblemDetail handleAiRetryable() {
-        return createProblem(HttpStatus.TOO_MANY_REQUESTS, "Too many requests", "AI service rate limit exceeded.");
+        return createProblem(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "Too many requests",
+                "Too many requests. Please wait a moment and try again."
+        );
     }
 
     @ExceptionHandler(NonTransientAiException.class)
@@ -80,7 +108,10 @@ public class GlobalExceptionHandler {
         };
 
         logger.warn("AI Error: {}", status);
-        return ProblemDetail.forStatusAndDetail(status, "AI service error");
+        return ProblemDetail.forStatusAndDetail(
+                status,
+                "The AI service is experiencing issues. Please try again in a few minutes."
+        );
     }
 
     @ExceptionHandler({RuntimeException.class, Exception.class})
@@ -89,7 +120,7 @@ public class GlobalExceptionHandler {
         return createProblem(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Internal Server Error",
-                "An unexpected error occurred."
+                "It seems something went wrong on our end. Please try again later."
         );
     }
 
