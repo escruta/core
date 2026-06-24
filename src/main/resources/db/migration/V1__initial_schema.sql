@@ -100,11 +100,16 @@ CREATE TABLE SPRING_AI_CHAT_MEMORY
     content         text        NOT NULL,
     type            varchar(10) NOT NULL,
     `timestamp`     timestamp   NOT NULL,
+    sequence_id     BIGINT      NOT NULL,
     CONSTRAINT SPRING_AI_CHAT_MEMORY_TYPE_CHECK CHECK (type IN ('USER', 'ASSISTANT', 'SYSTEM', 'TOOL'))
 );
 
 CREATE INDEX SPRING_AI_CHAT_MEMORY_CONVERSATION_ID_TIMESTAMP_IDX
     ON SPRING_AI_CHAT_MEMORY (conversation_id, `timestamp`);
+
+CREATE INDEX SPRING_AI_CHAT_MEMORY_CONVERSATION_ID_SEQUENCE_ID_IDX
+    ON SPRING_AI_CHAT_MEMORY (conversation_id, sequence_id);
+
 
 ALTER TABLE conversations
     ADD CONSTRAINT fka2jxphva2eexgctoqxgpl4krc FOREIGN KEY (notebook_id) REFERENCES notebooks (id);

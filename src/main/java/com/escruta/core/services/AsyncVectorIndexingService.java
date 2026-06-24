@@ -17,7 +17,14 @@ public class AsyncVectorIndexingService {
 
     public void indexSourceInVectorStore(UUID notebookId, UUID sourceId, String title, String link, String content) {
         try {
-            TokenTextSplitter textSplitter = new TokenTextSplitter(500, 100, 5, 10000, true);
+            TokenTextSplitter textSplitter = TokenTextSplitter
+                    .builder()
+                    .withChunkSize(500)
+                    .withMinChunkSizeChars(100)
+                    .withMinChunkLengthToEmbed(5)
+                    .withMaxNumChunks(10000)
+                    .withKeepSeparator(true)
+                    .build();
             List<Document> chunks = textSplitter.apply(List.of(new Document(content)));
 
             List<Document> documentsToSave = new ArrayList<>();

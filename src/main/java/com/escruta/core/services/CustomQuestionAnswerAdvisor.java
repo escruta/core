@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import org.checkerframework.checker.nullness.qual.NonNull;
+import org.springframework.lang.NonNull;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 

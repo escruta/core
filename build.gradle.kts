@@ -1,12 +1,12 @@
 plugins {
     java
     jacoco
-    id("org.springframework.boot") version "3.5.6"
+    id("org.springframework.boot") version "4.1.0"
     id("io.spring.dependency-management") version "1.1.7"
-    id("org.graalvm.buildtools.native") version "0.11.1"
-    id("org.flywaydb.flyway") version "12.1.1"
+    id("org.graalvm.buildtools.native") version "1.1.2"
+    id("org.flywaydb.flyway") version "12.9.0"
 }
-val springAiVersion by extra("1.1.2")
+val springAiVersion by extra("2.0.0")
 
 group = "com.escruta"
 
@@ -39,7 +39,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.springframework.ai:spring-ai-starter-model-openai")
     implementation("org.springframework.ai:spring-ai-starter-vector-store-qdrant")
-    implementation("org.springframework.ai:spring-ai-advisors-vector-store")
+    implementation("org.springframework.ai:spring-ai-vector-store-advisor")
     implementation("org.springframework.ai:spring-ai-starter-model-chat-memory-repository-jdbc")
     implementation("jakarta.activation:jakarta.activation-api:2.1.4")
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
@@ -50,8 +50,9 @@ dependencies {
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client")
     implementation("org.flywaydb:flyway-core")
     implementation("org.flywaydb:flyway-mysql")
-    implementation("org.springframework.retry:spring-retry")
-    implementation("org.springframework.boot:spring-boot-starter-aop")
+    implementation("org.springframework.retry:spring-retry:2.0.13")
+    implementation("org.springframework.ai:spring-ai-retry:1.1.2")
+    implementation("org.springframework.boot:spring-boot-starter-aspectj")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -60,8 +61,8 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("org.flywaydb:flyway-mysql:12.1.1")
-        classpath("org.mariadb.jdbc:mariadb-java-client:3.5.1")
+        classpath("org.flywaydb:flyway-mysql:12.9.0")
+        classpath("org.mariadb.jdbc:mariadb-java-client:3.5.9")
     }
 }
 
@@ -94,5 +95,5 @@ tasks.jacocoTestReport {
 }
 
 jacoco {
-    toolVersion = "0.8.11"
+    toolVersion = "0.8.15"
 }

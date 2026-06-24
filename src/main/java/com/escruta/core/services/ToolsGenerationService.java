@@ -11,7 +11,7 @@ import com.escruta.core.entities.Notebook;
 import com.escruta.core.entities.User;
 import com.escruta.core.repositories.GenerationJobRepository;
 import com.escruta.core.repositories.NotebookRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;

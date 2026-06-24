@@ -3,7 +3,7 @@ package com.escruta.core.jobs;
 import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.repositories.SourceRepository;
 import io.qdrant.client.QdrantClient;
-import io.qdrant.client.grpc.Points.PointId;
+import io.qdrant.client.grpc.Common.PointId;
 import io.qdrant.client.grpc.Points.RetrievedPoint;
 import io.qdrant.client.grpc.Points.ScrollPoints;
 import io.qdrant.client.grpc.Points.ScrollResponse;

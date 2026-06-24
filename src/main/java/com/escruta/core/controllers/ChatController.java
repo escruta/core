@@ -21,7 +21,8 @@ import org.springframework.ai.document.Document;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
+
 import java.util.*;
 
 @RestController
@@ -319,7 +320,7 @@ class ChatController {
                 .toList();
 
         return ResponseEntity.ok(new ChatReplyMessage(
-                chatResponse.getResult().getOutput().getText(),
+                Objects.requireNonNull(chatResponse.getResult()).getOutput().getText(),
                 conversationId,
                 conversation.getTitle(),
                 citedSources
