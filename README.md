@@ -24,12 +24,6 @@ Built with Java 25, Spring Boot 4.1, Spring AI, MariaDB, Qdrant, and Lombok.
 > [!TIP]
 > Gradle's toolchain support will auto-provision JDK 25 if not present on your host.
 
-### Installation
-
-- `./gradlew bootRun` - Start the development server.
-
-The backend service will be available at [localhost:8080](http://localhost:8080) by default.
-
 ## Configuration
 
 ### Environment Variables
