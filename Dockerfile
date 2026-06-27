@@ -1,15 +1,23 @@
-FROM ghcr.io/graalvm/native-image-community:21 AS build
-WORKDIR /app
-RUN microdnf install -y findutils zlib
+FROM gradle:jdk25-noble AS builder
+WORKDIR /builder
+
 COPY gradlew build.gradle.kts settings.gradle.kts ./
 COPY gradle/ gradle/
 RUN ./gradlew dependencies --no-daemon
-COPY src/ src/
-RUN ./gradlew nativeCompile --no-daemon
 
-FROM gcr.io/distroless/base-debian12
-WORKDIR /app
-COPY --from=build /app/build/native/nativeCompile/core ./core
-COPY --from=build /usr/lib64/libz.so.1 /lib/x86_64-linux-gnu/libz.so.1
+COPY src/ src/
+RUN ./gradlew bootJar --no-daemon
+
+FROM bellsoft/liberica-openjre-debian:25-cds
+WORKDIR /application
+
+COPY --from=builder /builder/build/libs/*.jar core.jar
+
+RUN java -XX:AOTCacheOutput=app.aot \
+    -Dspring.context.exit=onRefresh \
+    -Dspring.jpa.hibernate.ddl-auto=none \
+    -Dspring.ai.vectorstore.type=none \
+    -jar core.jar
+
 EXPOSE 8080
-ENTRYPOINT ["./core"]
+ENTRYPOINT ["java", "-XX:AOTCache=app.aot", "-jar", "core.jar"]

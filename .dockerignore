@@ -1,0 +1,10 @@
+.gradle/
+build/
+.git/
+.gitattributes
+.gitignore
+README.md
+AGENTS.md
+*.md
+.idea/
+*.iml

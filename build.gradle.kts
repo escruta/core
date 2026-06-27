@@ -5,14 +5,15 @@ plugins {
     id("io.spring.dependency-management") version "1.1.7"
     id("org.graalvm.buildtools.native") version "1.1.2"
     id("org.flywaydb.flyway") version "12.9.0"
+    id("org.springframework.boot.aot") version "4.1.0"
 }
-val springAiVersion by extra("2.0.0")
+val springAiVersion = "2.0.0"
 
 group = "com.escruta"
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
@@ -43,8 +44,8 @@ dependencies {
     implementation("org.springframework.ai:spring-ai-starter-model-chat-memory-repository-jdbc")
     implementation("jakarta.activation:jakarta.activation-api:2.1.4")
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
-    compileOnly("org.projectlombok:lombok:1.18.30")
-    annotationProcessor("org.projectlombok:lombok:1.18.30")
+    compileOnly("org.projectlombok:lombok:1.18.46")
+    annotationProcessor("org.projectlombok:lombok:1.18.46")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client")
@@ -79,6 +80,10 @@ graalvmNative {
             buildArgs.add("-H:+AddAllCharsets")
         }
     }
+}
+
+tasks.withType<org.springframework.boot.gradle.tasks.bundling.BootJar> {
+    mainClass.set("com.escruta.core.EscrutaCore")
 }
 
 tasks.withType<Test> {

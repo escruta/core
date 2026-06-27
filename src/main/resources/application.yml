@@ -15,20 +15,25 @@ spring:
     url: ${ESCRUTA_DB_URL:jdbc:mariadb://localhost:3306/escruta}
     username: ${ESCRUTA_DB_USER:root}
     password: ${ESCRUTA_DB_PASSWORD:1234}
+    hikari:
+      initialization-fail-timeout: -1
+  sql:
+    init:
+      mode: never
   jpa:
+    database-platform: org.hibernate.dialect.MariaDBDialect
     hibernate:
       ddl-auto: validate
     open-in-view: false
-  flyway:
-    enabled: true
-    baseline-on-migrate: true
+    properties:
+      hibernate:
+        boot:
+          allow_jdbc_metadata_access: false
   data:
     redis:
       host: ${ESCRUTA_KV_HOST:localhost}
       port: ${ESCRUTA_KV_PORT:6379}
       password: ${ESCRUTA_KV_PASSWORD:}
-    jdbc:
-      dialect: maria
   ai:
     chat:
       memory:
@@ -37,21 +42,16 @@ spring:
             initialize-schema: never
             platform: mysql
     openai:
-      base-url: ${ESCRUTA_AI_BASE_URL}
-      api-key: ${ESCRUTA_AI_API_KEY}
+      base-url: ${ESCRUTA_AI_BASE_URL:}
+      api-key: ${ESCRUTA_AI_API_KEY:}
       chat:
-        options:
-          model: ${ESCRUTA_AI_MODEL}
-          temperature: 0.5
-          reasoning-effort: low
-        completions-path: ${ESCRUTA_AI_CHAT_COMPLETIONS_PATH:/v1/chat/completions}
+        model: ${ESCRUTA_AI_MODEL:}
+        temperature: 0.5
+        reasoning-effort: low
       embedding:
-        options:
-          model: ${ESCRUTA_AI_EMBEDDING_MODEL}
-          dimensions: ${ESCRUTA_AI_EMBEDDING_DIMENSIONS:768}
-        embeddings-path: ${ESCRUTA_AI_EMBEDDING_PATH:/v1/embeddings}
-        base-url: ${ESCRUTA_AI_EMBEDDING_BASE_URL:${ESCRUTA_AI_BASE_URL}}
-        api-key: ${ESCRUTA_AI_EMBEDDING_API_KEY:${ESCRUTA_AI_API_KEY}}
+        model: ${ESCRUTA_AI_EMBEDDING_MODEL:}
+        base-url: ${ESCRUTA_AI_EMBEDDING_BASE_URL:${ESCRUTA_AI_BASE_URL:}}
+        api-key: ${ESCRUTA_AI_EMBEDDING_API_KEY:${ESCRUTA_AI_API_KEY:}}
     vectorstore:
       qdrant:
         initialize-schema: true
@@ -69,14 +69,14 @@ security:
   session:
     expiration-interval-seconds: 3600
   cors:
-    allowedOrigins: ${ESCRUTA_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+    allowedOrigins: ${ESCRUTA_CORS_ALLOWED_ORIGINS:*}
     allowedMethods: GET,POST,PUT,DELETE,OPTIONS
     allowedHeaders: Authorization,Content-Type
     allowCredentials: true
 services:
   extractor:
     base-url: ${ESCRUTA_EXTRACTOR_URL:http://localhost:8000}
-    api-key: ${ESCRUTA_EXTRACTOR_API_KEY}
+    api-key: ${ESCRUTA_EXTRACTOR_API_KEY:}
   search:
     base-url: ${ESCRUTA_SEARCH_URL:http://localhost:8001}
-    api-key: ${ESCRUTA_SEARCH_API_KEY}
+    api-key: ${ESCRUTA_SEARCH_API_KEY:}

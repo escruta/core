@@ -50,7 +50,7 @@ public class SecurityConfiguration {
     private boolean allowCredentials;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
@@ -73,7 +73,7 @@ public class SecurityConfiguration {
 
     @Bean
     public LogoutHandler logoutHandler() {
-        return (request, response, authentication) -> {
+        return (request, _, _) -> {
             String authHeader = request.getHeader("Authorization");
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
                 String token = authHeader.substring(7);
@@ -102,7 +102,7 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) {
         return config.getAuthenticationManager();
     }
 
@@ -123,7 +123,7 @@ public class SecurityConfiguration {
         CorsConfiguration configuration = new CorsConfiguration();
 
         List<String> origins = Arrays.asList(allowedOrigins.split(","));
-        configuration.setAllowedOrigins(origins);
+        configuration.setAllowedOriginPatterns(origins);
 
         List<String> methods = Arrays.asList(allowedMethods.split(","));
         configuration.setAllowedMethods(methods);

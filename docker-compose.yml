@@ -1,0 +1,43 @@
+services:
+  mariadb:
+    image: mariadb:11.7
+    container_name: escruta-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${ESCRUTA_DB_PASSWORD:-1234}
+      MYSQL_DATABASE: escruta
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - escruta-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: escruta-kv
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - escruta-net
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: escruta-vdb
+    ports:
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - escruta-net
+
+volumes:
+  mariadb_data:
+  redis_data:
+  qdrant_data:
+
+networks:
+  escruta-net:
+    name: escruta-network

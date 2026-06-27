@@ -3,32 +3,43 @@ package com.escruta.core.integration;
 import com.escruta.core.dtos.LoginUserDto;
 import com.escruta.core.dtos.RegisterUserDto;
 import com.escruta.core.dtos.notebook.NotebookCreationDTO;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import jakarta.servlet.Filter;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
-@AutoConfigureMockMvc
 @ActiveProfiles("test")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @DisplayName("Integration Tests - User Journey")
 class UserJourneyIntegrationTest {
     @Autowired
-    private MockMvc mockMvc;
+    private WebApplicationContext context;
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    private MockMvc mockMvc;
+
+    @BeforeEach
+    void setUp() {
+        var filterChainProxy = context.getBean("springSecurityFilterChain", Filter.class);
+        mockMvc = MockMvcBuilders.webAppContextSetup(context)
+                .addFilters(filterChainProxy)
+                .build();
+    }
 
     private static String authToken;
     private static String userEmail;
@@ -53,7 +64,7 @@ class UserJourneyIntegrationTest {
                 .andReturn();
 
         JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
-        authToken = response.get("token").asText();
+        authToken = response.get("token").asString();
 
         assertThat(authToken).isNotNull().isNotEmpty();
     }

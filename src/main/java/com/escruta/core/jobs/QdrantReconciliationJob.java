@@ -8,6 +8,7 @@ import io.qdrant.client.grpc.Points.RetrievedPoint;
 import io.qdrant.client.grpc.Points.ScrollPoints;
 import io.qdrant.client.grpc.Points.ScrollResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -21,7 +22,8 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 public class QdrantReconciliationJob {
-    private final QdrantClient qdrantClient;
+    @Autowired(required = false)
+    private QdrantClient qdrantClient;
     private final SourceRepository sourceRepository;
     private final NotebookRepository notebookRepository;
 
@@ -31,6 +33,7 @@ public class QdrantReconciliationJob {
     @Scheduled(cron = "0 0 3 * * SUN")
     @Transactional(readOnly = true)
     public void reconcile() {
+        if (qdrantClient == null) return;
         try {
             PointId nextOffset = null;
             boolean hasMore = true;

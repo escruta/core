@@ -7,6 +7,7 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -15,9 +16,13 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class RetrievalService {
-    private final VectorStore vectorStore;
+    @Autowired(required = false)
+    private VectorStore vectorStore;
 
     public CustomQuestionAnswerAdvisor getQuestionAnswerAdvisor(UUID notebookId, List<UUID> selectedSourceIds) {
+        if (vectorStore == null) {
+            return null;
+        }
         Filter.Expression notebookFilter = new Filter.Expression(
                 Filter.ExpressionType.EQ,
                 new Filter.Key("notebookId"),
@@ -51,6 +56,8 @@ public class RetrievalService {
 
     @Retryable(backoff = @Backoff(delay = 2000))
     public void deleteIndexedSource(UUID sourceId) {
+        if (vectorStore == null)
+            return;
         vectorStore.delete(new Filter.Expression(
                 Filter.ExpressionType.EQ,
                 new Filter.Key("sourceId"),
@@ -60,6 +67,8 @@ public class RetrievalService {
 
     @Retryable(backoff = @Backoff(delay = 2000))
     public void deleteIndexedNotebook(UUID notebookId) {
+        if (vectorStore == null)
+            return;
         vectorStore.delete(new Filter.Expression(
                 Filter.ExpressionType.EQ,
                 new Filter.Key("notebookId"),
@@ -68,6 +77,8 @@ public class RetrievalService {
     }
 
     public List<Document> getDocumentsForNotebook(UUID notebookId, String query, int limit) {
+        if (vectorStore == null)
+            return List.of();
         try {
             SearchRequest searchRequest = SearchRequest
                     .builder()
@@ -96,6 +107,8 @@ public class RetrievalService {
     }
 
     public void indexSourceChunks(List<Document> chunks) {
+        if (vectorStore == null)
+            return;
         try {
             vectorStore.add(chunks);
         } catch (Exception ignored) {
