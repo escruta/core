@@ -3,9 +3,7 @@ plugins {
     jacoco
     id("org.springframework.boot") version "4.1.0"
     id("io.spring.dependency-management") version "1.1.7"
-    id("org.graalvm.buildtools.native") version "1.1.2"
     id("org.flywaydb.flyway") version "12.9.0"
-    id("org.springframework.boot.aot") version "4.1.0"
 }
 val springAiVersion = "2.0.0"
 
@@ -70,15 +68,6 @@ buildscript {
 dependencyManagement {
     imports {
         mavenBom("org.springframework.ai:spring-ai-bom:$springAiVersion")
-    }
-}
-
-graalvmNative {
-    binaries {
-        named("main") {
-            buildArgs.add("-H:+ReportExceptionStackTraces")
-            buildArgs.add("-H:+AddAllCharsets")
-        }
     }
 }
 
