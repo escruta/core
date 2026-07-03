@@ -26,6 +26,10 @@ public class Notebook {
     @JoinColumn(nullable = false)
     private User user;
 
+    @ManyToOne
+    @JoinColumn()
+    private Folder folder;
+
     @Column()
     private String icon;
 

@@ -8,6 +8,8 @@ public record NotebookUpdateDTO(
         @NotNull
         String id,
         String icon,
-        String title
+        String title,
+        java.util.UUID folderId,
+        Boolean removeFolder
 ) {
 }

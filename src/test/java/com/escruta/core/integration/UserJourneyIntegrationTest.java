@@ -36,9 +36,7 @@ class UserJourneyIntegrationTest {
     @BeforeEach
     void setUp() {
         var filterChainProxy = context.getBean("springSecurityFilterChain", Filter.class);
-        mockMvc = MockMvcBuilders.webAppContextSetup(context)
-                .addFilters(filterChainProxy)
-                .build();
+        mockMvc = MockMvcBuilders.webAppContextSetup(context).addFilters(filterChainProxy).build();
     }
 
     private static String authToken;
@@ -95,7 +93,7 @@ class UserJourneyIntegrationTest {
     @Order(4)
     @DisplayName("4. Create a notebook")
     void step4_createNotebook() throws Exception {
-        NotebookCreationDTO dto = new NotebookCreationDTO("📓", "My First Notebook");
+        NotebookCreationDTO dto = new NotebookCreationDTO("📓", "My First Notebook", null);
 
         mockMvc
                 .perform(post("/notebooks")

@@ -34,10 +34,12 @@ CREATE TABLE notebooks
     updated_at datetime(6),
     id         binary(16)   NOT NULL PRIMARY KEY,
     user_id    binary(16)   NOT NULL,
+    folder_id  binary(16)   NULL,
     icon       varchar(255),
     summary    text,
     title      varchar(255) NOT NULL,
-    CONSTRAINT fkk5jweiuqjycrab2dgljlc919i FOREIGN KEY (user_id) REFERENCES users (id)
+    CONSTRAINT fkk5jweiuqjycrab2dgljlc919i FOREIGN KEY (user_id) REFERENCES users (id),
+    CONSTRAINT fk_notebooks_folders FOREIGN KEY (folder_id) REFERENCES folders (id) ON DELETE SET NULL
 );
 
 CREATE TABLE generation_jobs
@@ -88,7 +90,7 @@ CREATE TABLE notes
     source_id   binary(16) UNIQUE,
     content     longtext,
     title       varchar(255) NOT NULL,
-    CONSTRAINT fk_notes_folders FOREIGN KEY (folder_id) REFERENCES folders (id),
+    CONSTRAINT fk_notes_folders FOREIGN KEY (folder_id) REFERENCES folders (id) ON DELETE SET NULL,
     CONSTRAINT fk814tu72hqd3m67ramoipdr0qq FOREIGN KEY (notebook_id) REFERENCES notebooks (id),
     CONSTRAINT fkka3wrcqyt11gt9qyvbpkuah7 FOREIGN KEY (source_id) REFERENCES sources (id),
     CONSTRAINT fk_notes_users FOREIGN KEY (user_id) REFERENCES users (id)

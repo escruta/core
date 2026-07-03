@@ -7,6 +7,7 @@ import com.escruta.core.dtos.notebook.NotebookWithDetailsDTO;
 import com.escruta.core.entities.Notebook;
 import com.escruta.core.mappers.NotebookMapper;
 import com.escruta.core.repositories.NotebookRepository;
+import com.escruta.core.repositories.FolderRepository;
 import com.escruta.core.repositories.SourceRepository;
 import lombok.RequiredArgsConstructor;
 import com.escruta.core.events.NotebookDeletedEvent;
@@ -24,6 +25,7 @@ public class NotebookService {
     private final NotebookRepository notebookRepository;
     private final UserService userService;
     private final SourceRepository sourceRepository;
+    private final FolderRepository folderRepository;
     private final NotebookMapper notebookMapper;
     private final NoteService noteService;
     private final ApplicationEventPublisher eventPublisher;
@@ -48,6 +50,9 @@ public class NotebookService {
         var currentUser = userService.getCurrentUser();
         if (currentUser != null) {
             Notebook notebook = notebookMapper.toNotebook(createNotebookDto, currentUser);
+            if (createNotebookDto.folderId() != null) {
+                notebook.setFolder(folderRepository.findById(createNotebookDto.folderId()).orElse(null));
+            }
             notebookRepository.save(notebook);
             return new NotebookResponseDTO(notebook);
         }
@@ -61,6 +66,13 @@ public class NotebookService {
             if (notebookOptional.isPresent()) {
                 Notebook notebook = notebookOptional.get();
                 notebookMapper.updateNotebookFromDto(newNotebookDto, notebook);
+                if (Boolean.TRUE.equals(newNotebookDto.removeFolder())) {
+                    notebook.setFolder(null);
+                } else if (newNotebookDto.folderId() != null) {
+                    notebook.setFolder(folderRepository
+                            .findById(newNotebookDto.folderId())
+                            .orElse(notebook.getFolder()));
+                }
                 notebookRepository.save(notebook);
                 return new NotebookResponseDTO(notebook);
             }

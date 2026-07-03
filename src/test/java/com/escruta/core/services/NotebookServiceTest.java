@@ -116,7 +116,7 @@ class NotebookServiceTest {
     @DisplayName("Should create notebook successfully")
     void createNotebook_shouldCreateNotebook() {
         User user = createUser();
-        NotebookCreationDTO dto = new NotebookCreationDTO("📓", "New Notebook");
+        NotebookCreationDTO dto = new NotebookCreationDTO("📓", "New Notebook", null);
         Notebook notebook = createNotebook(NOTEBOOK_ID, "New Notebook", user);
 
         when(userService.getCurrentUser()).thenReturn(user);
@@ -133,7 +133,7 @@ class NotebookServiceTest {
     @Test
     @DisplayName("Should return null when user not authenticated during creation")
     void createNotebook_shouldReturnNullWhenUserNotAuthenticated() {
-        NotebookCreationDTO dto = new NotebookCreationDTO("📓", "New Notebook");
+        NotebookCreationDTO dto = new NotebookCreationDTO("📓", "New Notebook", null);
 
         when(userService.getCurrentUser()).thenReturn(null);
 
@@ -148,7 +148,7 @@ class NotebookServiceTest {
     void updateNotebook_shouldUpdateNotebook() {
         User user = createUser();
         Notebook existingNotebook = createNotebook(NOTEBOOK_ID, "Old Title", user);
-        NotebookUpdateDTO dto = new NotebookUpdateDTO(NOTEBOOK_ID.toString(), "📒", "Updated Title");
+        NotebookUpdateDTO dto = new NotebookUpdateDTO(NOTEBOOK_ID.toString(), "📒", "Updated Title", null, null);
 
         when(notebookRepository.findById(NOTEBOOK_ID)).thenReturn(Optional.of(existingNotebook));
         doAnswer(invocation -> {
@@ -170,7 +170,7 @@ class NotebookServiceTest {
     @Test
     @DisplayName("Should return null when updating non-existent notebook")
     void updateNotebook_shouldReturnNullWhenNotFound() {
-        NotebookUpdateDTO dto = new NotebookUpdateDTO(NOTEBOOK_ID.toString(), "📒", "Updated Title");
+        NotebookUpdateDTO dto = new NotebookUpdateDTO(NOTEBOOK_ID.toString(), "📒", "Updated Title", null, null);
 
         when(notebookRepository.findById(NOTEBOOK_ID)).thenReturn(Optional.empty());
 
@@ -183,7 +183,7 @@ class NotebookServiceTest {
     @Test
     @DisplayName("Should return null when notebook ID is invalid")
     void updateNotebook_shouldReturnNullWhenInvalidId() {
-        NotebookUpdateDTO dto = new NotebookUpdateDTO("invalid-uuid", "📒", "Updated Title");
+        NotebookUpdateDTO dto = new NotebookUpdateDTO("invalid-uuid", "📒", "Updated Title", null, null);
 
         NotebookResponseDTO result = notebookService.updateNotebook(dto);
 
@@ -196,7 +196,7 @@ class NotebookServiceTest {
     void deleteNotebook_shouldDeleteNotebook() {
         User user = createUser();
         Notebook notebook = createNotebook(NOTEBOOK_ID, "Notebook to Delete", user);
-        NotebookUpdateDTO dto = new NotebookUpdateDTO(NOTEBOOK_ID.toString(), null, null);
+        NotebookUpdateDTO dto = new NotebookUpdateDTO(NOTEBOOK_ID.toString(), null, null, null, null);
 
         when(notebookRepository.findById(NOTEBOOK_ID)).thenReturn(Optional.of(notebook));
 
@@ -211,7 +211,7 @@ class NotebookServiceTest {
     @Test
     @DisplayName("Should return null when deleting non-existent notebook")
     void deleteNotebook_shouldReturnNullWhenNotFound() {
-        NotebookUpdateDTO dto = new NotebookUpdateDTO(NOTEBOOK_ID.toString(), null, null);
+        NotebookUpdateDTO dto = new NotebookUpdateDTO(NOTEBOOK_ID.toString(), null, null, null, null);
 
         when(notebookRepository.findById(NOTEBOOK_ID)).thenReturn(Optional.empty());
 
@@ -224,7 +224,7 @@ class NotebookServiceTest {
     @Test
     @DisplayName("Should return null when deleting with invalid notebook ID")
     void deleteNotebook_shouldReturnNullWhenInvalidId() {
-        NotebookUpdateDTO dto = new NotebookUpdateDTO("invalid-uuid", null, null);
+        NotebookUpdateDTO dto = new NotebookUpdateDTO("invalid-uuid", null, null, null, null);
 
         NotebookResponseDTO result = notebookService.deleteNotebook(dto);
 

@@ -11,6 +11,7 @@ public record NotebookResponseDTO(
         BasicUser user,
         String icon,
         String title,
+        UUID folderId,
         Timestamp createdAt,
         Timestamp updatedAt
 ) {
@@ -20,6 +21,9 @@ public record NotebookResponseDTO(
                 new BasicUser(notebook.getUser()),
                 notebook.getIcon(),
                 notebook.getTitle(),
+                notebook.getFolder() != null ?
+                        notebook.getFolder().getId() :
+                        null,
                 notebook.getCreatedAt(),
                 notebook.getUpdatedAt()
         );

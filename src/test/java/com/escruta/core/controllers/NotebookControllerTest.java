@@ -54,8 +54,24 @@ class NotebookControllerTest {
     @WithMockUser(username = "test@example.com")
     @DisplayName("Should return list of notebooks for authenticated user")
     void getUserNotebooks_shouldReturnNotebooksWhenAuthenticated() throws Exception {
-        NotebookResponseDTO notebook1 = new NotebookResponseDTO(UUID.randomUUID(), null, "📓", "Notebook 1", null, null);
-        NotebookResponseDTO notebook2 = new NotebookResponseDTO(UUID.randomUUID(), null, "📓", "Notebook 2", null, null);
+        NotebookResponseDTO notebook1 = new NotebookResponseDTO(
+                UUID.randomUUID(),
+                null,
+                "📓",
+                "Notebook 1",
+                null,
+                null,
+                null
+        );
+        NotebookResponseDTO notebook2 = new NotebookResponseDTO(
+                UUID.randomUUID(),
+                null,
+                "📓",
+                "Notebook 2",
+                null,
+                null,
+                null
+        );
 
         when(notebookService.getAllUserNotebooks()).thenReturn(List.of(notebook1, notebook2));
 
@@ -70,12 +86,13 @@ class NotebookControllerTest {
     @WithMockUser(username = "test@example.com")
     @DisplayName("Should create notebook successfully")
     void createNotebook_shouldCreateSuccessfully() throws Exception {
-        NotebookCreationDTO dto = new NotebookCreationDTO("📓", "New Notebook");
+        NotebookCreationDTO dto = new NotebookCreationDTO("📓", "New Notebook", null);
         NotebookResponseDTO response = new NotebookResponseDTO(
                 UUID.randomUUID(),
                 null,
                 "📓",
                 "New Notebook",
+                null,
                 null,
                 null
         );
@@ -94,7 +111,7 @@ class NotebookControllerTest {
     @WithMockUser(username = "test@example.com")
     @DisplayName("Should return 400 when creating notebook with blank title")
     void createNotebook_shouldReturn400WhenTitleBlank() throws Exception {
-        NotebookCreationDTO dto = new NotebookCreationDTO("📓", "");
+        NotebookCreationDTO dto = new NotebookCreationDTO("📓", "", null);
 
         mockMvc
                 .perform(post("/notebooks")
@@ -108,8 +125,16 @@ class NotebookControllerTest {
     @DisplayName("Should update notebook successfully when owner")
     void updateNotebook_shouldUpdateWhenOwner() throws Exception {
         UUID notebookId = UUID.randomUUID();
-        NotebookUpdateDTO dto = new NotebookUpdateDTO(notebookId.toString(), "📒", "Updated Title");
-        NotebookResponseDTO response = new NotebookResponseDTO(notebookId, null, "📒", "Updated Title", null, null);
+        NotebookUpdateDTO dto = new NotebookUpdateDTO(notebookId.toString(), "📒", "Updated Title", null, null);
+        NotebookResponseDTO response = new NotebookResponseDTO(
+                notebookId,
+                null,
+                "📒",
+                "Updated Title",
+                null,
+                null,
+                null
+        );
 
         when(notebookOwnershipService.isUserNotebookOwner(notebookId)).thenReturn(true);
         when(notebookService.updateNotebook(any())).thenReturn(response);
@@ -127,7 +152,7 @@ class NotebookControllerTest {
     @DisplayName("Should return 403 when updating notebook without ownership")
     void updateNotebook_shouldReturn403WhenNotOwner() throws Exception {
         UUID notebookId = UUID.randomUUID();
-        NotebookUpdateDTO dto = new NotebookUpdateDTO(notebookId.toString(), "📒", "Updated Title");
+        NotebookUpdateDTO dto = new NotebookUpdateDTO(notebookId.toString(), "📒", "Updated Title", null, null);
 
         when(notebookOwnershipService.isUserNotebookOwner(notebookId)).thenReturn(false);
 
@@ -143,7 +168,7 @@ class NotebookControllerTest {
     @DisplayName("Should return 404 when updating non-existent notebook")
     void updateNotebook_shouldReturn404WhenNotFound() throws Exception {
         UUID notebookId = UUID.randomUUID();
-        NotebookUpdateDTO dto = new NotebookUpdateDTO(notebookId.toString(), "📒", "Updated Title");
+        NotebookUpdateDTO dto = new NotebookUpdateDTO(notebookId.toString(), "📒", "Updated Title", null, null);
 
         when(notebookOwnershipService.isUserNotebookOwner(notebookId)).thenReturn(true);
         when(notebookService.updateNotebook(any())).thenReturn(null);
@@ -160,8 +185,16 @@ class NotebookControllerTest {
     @DisplayName("Should delete notebook successfully when owner")
     void deleteNotebook_shouldDeleteWhenOwner() throws Exception {
         UUID notebookId = UUID.randomUUID();
-        NotebookUpdateDTO dto = new NotebookUpdateDTO(notebookId.toString(), null, null);
-        NotebookResponseDTO response = new NotebookResponseDTO(notebookId, null, null, "Deleted Notebook", null, null);
+        NotebookUpdateDTO dto = new NotebookUpdateDTO(notebookId.toString(), null, null, null, null);
+        NotebookResponseDTO response = new NotebookResponseDTO(
+                notebookId,
+                null,
+                null,
+                "Deleted Notebook",
+                null,
+                null,
+                null
+        );
 
         when(notebookOwnershipService.isUserNotebookOwner(notebookId)).thenReturn(true);
         when(notebookService.deleteNotebook(any())).thenReturn(response);
@@ -178,7 +211,7 @@ class NotebookControllerTest {
     @DisplayName("Should return 403 when deleting notebook without ownership")
     void deleteNotebook_shouldReturn403WhenNotOwner() throws Exception {
         UUID notebookId = UUID.randomUUID();
-        NotebookUpdateDTO dto = new NotebookUpdateDTO(notebookId.toString(), null, null);
+        NotebookUpdateDTO dto = new NotebookUpdateDTO(notebookId.toString(), null, null, null, null);
 
         when(notebookOwnershipService.isUserNotebookOwner(notebookId)).thenReturn(false);
 
@@ -194,7 +227,7 @@ class NotebookControllerTest {
     @DisplayName("Should return 404 when deleting non-existent notebook")
     void deleteNotebook_shouldReturn404WhenNotFound() throws Exception {
         UUID notebookId = UUID.randomUUID();
-        NotebookUpdateDTO dto = new NotebookUpdateDTO(notebookId.toString(), null, null);
+        NotebookUpdateDTO dto = new NotebookUpdateDTO(notebookId.toString(), null, null, null, null);
 
         when(notebookOwnershipService.isUserNotebookOwner(notebookId)).thenReturn(true);
         when(notebookService.deleteNotebook(any())).thenReturn(null);
