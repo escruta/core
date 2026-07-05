@@ -4,6 +4,7 @@ import com.escruta.core.dtos.note.NoteCreationDTO;
 import com.escruta.core.dtos.note.NoteResponseDTO;
 import com.escruta.core.dtos.note.NoteUpdateDTO;
 import com.escruta.core.dtos.note.NoteWithContentDTO;
+import com.escruta.core.dtos.note.NotesPageResponse;
 import com.escruta.core.services.NoteService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,17 @@ public class NoteController {
             @RequestParam(required = false) UUID notebookId
     ) {
         return ResponseEntity.ok(noteService.getNotes(notebookId));
+    }
+
+    @GetMapping("page")
+    public NotesPageResponse getNotesPaginated(
+            @RequestParam(required = false) UUID notebookId,
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "Newest") String sort
+    ) {
+        return noteService.getNotes(notebookId, limit, offset, search, sort);
     }
 
     @GetMapping("{noteId}")

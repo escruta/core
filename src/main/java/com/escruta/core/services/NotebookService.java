@@ -4,6 +4,7 @@ import com.escruta.core.dtos.notebook.NotebookCreationDTO;
 import com.escruta.core.dtos.notebook.NotebookResponseDTO;
 import com.escruta.core.dtos.notebook.NotebookUpdateDTO;
 import com.escruta.core.dtos.notebook.NotebookWithDetailsDTO;
+import com.escruta.core.dtos.notebook.NotebooksPageResponse;
 import com.escruta.core.entities.Notebook;
 import com.escruta.core.mappers.NotebookMapper;
 import com.escruta.core.repositories.NotebookRepository;
@@ -12,6 +13,8 @@ import com.escruta.core.repositories.SourceRepository;
 import lombok.RequiredArgsConstructor;
 import com.escruta.core.events.NotebookDeletedEvent;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -80,6 +83,40 @@ public class NotebookService {
         } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    public NotebooksPageResponse getUserNotebooks(int limit, int offset, String search, String sort) {
+        var currentUser = userService.getCurrentUser();
+        if (currentUser == null) {
+            return new NotebooksPageResponse(List.of(), 0, false);
+        }
+
+        var userId = currentUser.getId();
+        var pageable = PageRequest.of(offset / limit, limit, buildSort(sort));
+
+        List<Notebook> notebooks;
+        long total;
+
+        if (search != null && !search.isBlank()) {
+            notebooks = notebookRepository.findByUserIdAndTitleContainingIgnoreCase(userId, search.trim(), pageable);
+            total = notebookRepository.countByUserIdAndTitleContainingIgnoreCase(userId, search.trim());
+        } else {
+            notebooks = notebookRepository.findByUserId(userId, pageable);
+            total = notebookRepository.countByUserId(userId);
+        }
+
+        var list = notebooks.stream().map(NotebookResponseDTO::new).toList();
+        boolean hasMore = (offset + list.size()) < total;
+        return new NotebooksPageResponse(list, total, hasMore);
+    }
+
+    private Sort buildSort(String sort) {
+        return switch (sort) {
+            case "Oldest" -> Sort.by(Sort.Direction.ASC, "createdAt");
+            case "Alphabetical" -> Sort.by(Sort.Direction.ASC, "title");
+            case "Reverse Alphabetical" -> Sort.by(Sort.Direction.DESC, "title");
+            default -> Sort.by(Sort.Direction.DESC, "createdAt");
+        };
     }
 
     @Transactional

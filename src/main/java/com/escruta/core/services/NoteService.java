@@ -4,6 +4,7 @@ import com.escruta.core.dtos.note.NoteCreationDTO;
 import com.escruta.core.dtos.note.NoteResponseDTO;
 import com.escruta.core.dtos.note.NoteUpdateDTO;
 import com.escruta.core.dtos.note.NoteWithContentDTO;
+import com.escruta.core.dtos.note.NotesPageResponse;
 import com.escruta.core.entities.Note;
 import com.escruta.core.entities.Notebook;
 import com.escruta.core.entities.Folder;
@@ -12,6 +13,8 @@ import com.escruta.core.repositories.NoteRepository;
 import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.repositories.FolderRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -42,6 +45,59 @@ public class NoteService {
         return noteRepository.findByUserId(currentUser.getId()).stream().map(NoteResponseDTO::new).toList();
     }
 
+    public NotesPageResponse getNotes(UUID notebookId, int limit, int offset, String search, String sort) {
+        var currentUser = userService.getCurrentUser();
+        if (currentUser == null) {
+            return new NotesPageResponse(List.of(), 0, false);
+        }
+
+        var userId = currentUser.getId();
+        var pageable = PageRequest.of(offset / limit, limit, buildSort(sort));
+
+        List<Note> notes;
+        long total;
+
+        if (notebookId != null) {
+            if (search != null && !search.isBlank()) {
+                notes = noteRepository.findByNotebookIdAndUserIdAndTitleContainingIgnoreCase(
+                        notebookId,
+                        userId,
+                        search.trim(),
+                        pageable
+                );
+                total = noteRepository.countByNotebookIdAndUserIdAndTitleContainingIgnoreCase(
+                        notebookId,
+                        userId,
+                        search.trim()
+                );
+            } else {
+                notes = noteRepository.findByNotebookIdAndUserId(notebookId, userId, pageable);
+                total = noteRepository.countByNotebookIdAndUserId(notebookId, userId);
+            }
+        } else {
+            if (search != null && !search.isBlank()) {
+                notes = noteRepository.findByUserIdAndTitleContainingIgnoreCase(userId, search.trim(), pageable);
+                total = noteRepository.countByUserIdAndTitleContainingIgnoreCase(userId, search.trim());
+            } else {
+                notes = noteRepository.findByUserId(userId, pageable);
+                total = noteRepository.countByUserId(userId);
+            }
+        }
+
+        var list = notes.stream().map(NoteResponseDTO::new).toList();
+        boolean hasMore = (offset + list.size()) < total;
+        return new NotesPageResponse(list, total, hasMore);
+    }
+
+    private Sort buildSort(String sort) {
+        return switch (sort) {
+            case "Oldest" -> Sort.by(Sort.Direction.ASC, "createdAt");
+            case "Alphabetical" -> Sort.by(Sort.Direction.ASC, "title");
+            case "Reverse Alphabetical" -> Sort.by(Sort.Direction.DESC, "title");
+            default -> Sort.by(Sort.Direction.DESC, "createdAt");
+        };
+    }
+
     public NoteWithContentDTO getNote(UUID noteId) {
         Optional<Note> note = noteRepository.findById(noteId);
         return note.map(NoteWithContentDTO::new).orElse(null);
@@ -61,7 +117,7 @@ public class NoteService {
                 return null;
             }
         }
-        
+
         Folder folder = null;
         if (newNoteDto.folderId() != null) {
             folder = folderRepository.findById(newNoteDto.folderId()).orElse(null);

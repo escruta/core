@@ -4,6 +4,7 @@ import com.escruta.core.dtos.notebook.NotebookCreationDTO;
 import com.escruta.core.dtos.notebook.NotebookResponseDTO;
 import com.escruta.core.dtos.notebook.NotebookUpdateDTO;
 import com.escruta.core.dtos.notebook.NotebookWithDetailsDTO;
+import com.escruta.core.dtos.notebook.NotebooksPageResponse;
 import com.escruta.core.services.NotebookService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,16 @@ public class NotebookController {
     @GetMapping
     public List<NotebookResponseDTO> getUserNotebooks() {
         return notebookService.getAllUserNotebooks();
+    }
+
+    @GetMapping("page")
+    public NotebooksPageResponse getUserNotebooksPaginated(
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "Newest") String sort
+    ) {
+        return notebookService.getUserNotebooks(limit, offset, search, sort);
     }
 
     @GetMapping("{notebookId}")
