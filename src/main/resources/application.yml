@@ -70,7 +70,7 @@ security:
     expiration-interval-seconds: 3600
   cors:
     allowedOrigins: ${ESCRUTA_CORS_ALLOWED_ORIGINS:*}
-    allowedMethods: GET,POST,PUT,DELETE,OPTIONS
+    allowedMethods: GET,POST,PUT,PATCH,DELETE,OPTIONS
     allowedHeaders: Authorization,Content-Type
     allowCredentials: true
 services:
