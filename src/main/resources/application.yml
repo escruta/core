@@ -74,9 +74,6 @@ security:
     allowedHeaders: Authorization,Content-Type
     allowCredentials: true
 services:
-  extractor:
-    base-url: ${ESCRUTA_EXTRACTOR_URL:http://localhost:8000}
-    api-key: ${ESCRUTA_EXTRACTOR_API_KEY:}
-  search:
-    base-url: ${ESCRUTA_SEARCH_URL:http://localhost:8001}
-    api-key: ${ESCRUTA_SEARCH_API_KEY:}
+  helper:
+    base-url: ${ESCRUTA_HELPER_URL:http://localhost:8000}
+    api-key: ${ESCRUTA_HELPER_API_KEY:}

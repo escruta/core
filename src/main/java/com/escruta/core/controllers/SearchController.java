@@ -2,7 +2,7 @@ package com.escruta.core.controllers;
 
 import com.escruta.core.dtos.SearchRequest;
 import com.escruta.core.dtos.SearchResponse;
-import com.escruta.core.services.SearchService;
+import com.escruta.core.services.HelperService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -11,10 +11,10 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("search")
 @RequiredArgsConstructor
 public class SearchController {
-    private final SearchService searchService;
+    private final HelperService helperService;
 
     @PostMapping
     public SearchResponse search(@Valid @RequestBody SearchRequest request) {
-        return searchService.search(request.query(), request.maxResults());
+        return helperService.search(request.query(), request.maxResults());
     }
 }

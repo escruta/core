@@ -38,7 +38,7 @@ public class SourceService {
     private final NotebookRepository notebookRepository;
     private final SourceMapper sourceMapper;
     private final ChatModel chatModel;
-    private final ExtractorService extractorService;
+    private final HelperService helperService;
     private final AsyncVectorIndexingService asyncVectorIndexingService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -77,7 +77,7 @@ public class SourceService {
             public void afterCommit() {
                 CompletableFuture.runAsync(() -> {
                     try {
-                        var response = extractorService.extractMarkdown(newSourceDto.link());
+                        var response = helperService.extractMarkdown(newSourceDto.link());
 
                         Source updatedSource = sourceRepository.findById(finalSourceId).orElseThrow();
                         asyncVectorIndexingService.indexSourceInVectorStore(
@@ -144,7 +144,7 @@ public class SourceService {
     ) {
         Optional<Notebook> notebookOptional = notebookRepository.findById(notebookId);
 
-        if (!extractorService.isSupportedFileType(file.getContentType())) {
+        if (!helperService.isSupportedFileType(file.getContentType())) {
             throw new RuntimeException("Unsupported file type: " + file.getContentType());
         }
 
@@ -171,7 +171,7 @@ public class SourceService {
             public void afterCommit() {
                 CompletableFuture.runAsync(() -> {
                     try {
-                        var response = extractorService.extractMarkdown(fileBytes, filename);
+                        var response = helperService.extractMarkdown(fileBytes, filename);
 
                         Source updatedSource = sourceRepository.findById(finalSourceId).orElseThrow();
                         asyncVectorIndexingService.indexSourceInVectorStore(

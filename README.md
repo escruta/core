@@ -12,8 +12,7 @@ Built with Java 25, Spring Boot 4.1, Spring AI, MariaDB, Qdrant, and Lombok.
 - Java Development Kit (JDK) 25.
 - Docker (for MariaDB, Qdrant, and Redis).
 - An OpenAI-compatible API.
-- Escruta Extractor service running (see [Escruta Extractor](https://github.com/escruta/extractor)).
-- Escruta Search service running (see [Escruta Search](https://github.com/escruta/search)).
+- Escruta Helper service running (see [Escruta Helper](https://github.com/escruta/helper)).
 
 > [!NOTE]
 > Spin up all infrastructure dependencies with a single command:
@@ -31,31 +30,29 @@ Built with Java 25, Spring Boot 4.1, Spring AI, MariaDB, Qdrant, and Lombok.
 The application can be configured using environment variables. These can be set in your shell or passed to the
 application at runtime.
 
-| Variable                          | Description                          | Default                                 |
-|-----------------------------------|--------------------------------------|-----------------------------------------|
-| `ESCRUTA_PORT`                    | Backend port                         | `8080`                                  |
-| `ESCRUTA_DB_URL`                  | JDBC URL for the database            | `jdbc:mariadb://localhost:3306/escruta` |
-| `ESCRUTA_DB_USER`                 | Database username                    | `root`                                  |
-| `ESCRUTA_DB_PASSWORD`             | Database password                    | `1234`                                  |
-| `ESCRUTA_KV_HOST`                 | Redis database host                  | `localhost`                             |
-| `ESCRUTA_KV_PORT`                 | Redis database port                  | `6379`                                  |
-| `ESCRUTA_KV_PASSWORD`             | Redis database password              |                                         |
-| `ESCRUTA_AI_BASE_URL`             | Base URL for the AI provider         | (Required)                              |
-| `ESCRUTA_AI_API_KEY`              | API Key for the AI provider          | (Required)                              |
-| `ESCRUTA_AI_MODEL`                | AI model to use for chat             | (Required)                              |
-| `ESCRUTA_AI_EMBEDDING_MODEL`      | AI model to use for embeddings       | (Required)                              |
-| `ESCRUTA_AI_EMBEDDING_DIMENSIONS` | Dimensions of the embedding vectors  | `768`                                   |
-| `ESCRUTA_AI_EMBEDDING_BASE_URL`   | Base URL for embeddings (if differs) | `ESCRUTA_AI_BASE_URL`                   |
-| `ESCRUTA_AI_EMBEDDING_API_KEY`    | API Key for embeddings (if differs)  | `ESCRUTA_AI_API_KEY`                    |
-| `ESCRUTA_VDB_HOST`                | Qdrant database host                 | `localhost`                             |
-| `ESCRUTA_VDB_PORT`                | Qdrant database port                 | `6334`                                  |
-| `ESCRUTA_VDB_API_KEY`             | API Key for Qdrant (if required)     |                                         |
-| `ESCRUTA_VDB_COLLECTION`          | Qdrant collection name               | `escruta`                               |
-| `ESCRUTA_CORS_ALLOWED_ORIGINS`    | Allowed origins for CORS             | `http://localhost:5173`                 |
-| `ESCRUTA_EXTRACTOR_URL`           | Extractor service URL                | `http://localhost:8000`                 |
-| `ESCRUTA_EXTRACTOR_API_KEY`       | Internal API Key for the Extractor   | (Required)                              |
-| `ESCRUTA_SEARCH_URL`              | Search service URL                   | `http://localhost:8001`                 |
-| `ESCRUTA_SEARCH_API_KEY`          | Internal API Key for the Search      | (Required)                              |
+| Variable                          | Description                           | Default                                 |
+|-----------------------------------|---------------------------------------|-----------------------------------------|
+| `ESCRUTA_PORT`                    | Backend port                          | `8080`                                  |
+| `ESCRUTA_DB_URL`                  | JDBC URL for the database             | `jdbc:mariadb://localhost:3306/escruta` |
+| `ESCRUTA_DB_USER`                 | Database username                     | `root`                                  |
+| `ESCRUTA_DB_PASSWORD`             | Database password                     | `1234`                                  |
+| `ESCRUTA_KV_HOST`                 | Redis database host                   | `localhost`                             |
+| `ESCRUTA_KV_PORT`                 | Redis database port                   | `6379`                                  |
+| `ESCRUTA_KV_PASSWORD`             | Redis database password               |                                         |
+| `ESCRUTA_AI_BASE_URL`             | Base URL for the AI provider          | (Required)                              |
+| `ESCRUTA_AI_API_KEY`              | API Key for the AI provider           | (Required)                              |
+| `ESCRUTA_AI_MODEL`                | AI model to use for chat              | (Required)                              |
+| `ESCRUTA_AI_EMBEDDING_MODEL`      | AI model to use for embeddings        | (Required)                              |
+| `ESCRUTA_AI_EMBEDDING_DIMENSIONS` | Dimensions of the embedding vectors   | `768`                                   |
+| `ESCRUTA_AI_EMBEDDING_BASE_URL`   | Base URL for embeddings (if differs)  | `ESCRUTA_AI_BASE_URL`                   |
+| `ESCRUTA_AI_EMBEDDING_API_KEY`    | API Key for embeddings (if differs)   | `ESCRUTA_AI_API_KEY`                    |
+| `ESCRUTA_VDB_HOST`                | Qdrant database host                  | `localhost`                             |
+| `ESCRUTA_VDB_PORT`                | Qdrant database port                  | `6334`                                  |
+| `ESCRUTA_VDB_API_KEY`             | API Key for Qdrant (if required)      |                                         |
+| `ESCRUTA_VDB_COLLECTION`          | Qdrant collection name                | `escruta`                               |
+| `ESCRUTA_CORS_ALLOWED_ORIGINS`    | Allowed origins for CORS              | `http://localhost:5173`                 |
+| `ESCRUTA_HELPER_URL`              | Helper service URL (search + extract) | `http://localhost:8000`                 |
+| `ESCRUTA_HELPER_API_KEY`          | Internal API Key for the Helper       | (Required)                              |
 
 See [application.yml](./src/main/resources/application.yml) for the full list of configuration options.
 

@@ -1,6 +1,7 @@
 package com.escruta.core.services;
 
 import com.escruta.core.dtos.ExtractorResponse;
+import com.escruta.core.dtos.SearchResponse;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,14 +19,14 @@ import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
-public class ExtractorService {
+public class HelperService {
     private final RestClient.Builder restClientBuilder;
     private RestClient restClient;
 
-    @Value("${services.extractor.base-url}")
+    @Value("${services.helper.base-url}")
     private String baseUrl;
 
-    @Value("${services.extractor.api-key}")
+    @Value("${services.helper.api-key}")
     private String apiKey;
 
     @PostConstruct
@@ -37,6 +38,13 @@ public class ExtractorService {
                 .build();
     }
 
+    public SearchResponse search(String query, int maxResults) {
+        var body = new LinkedMultiValueMap<String, Object>();
+        body.add("query", query);
+        body.add("max_results", String.valueOf(maxResults));
+        return postForm(body, "/search", SearchResponse.class);
+    }
+
     public ExtractorResponse extractMarkdown(byte[] fileBytes, String filename) {
         var resource = new ByteArrayResource(fileBytes) {
             @Override
@@ -46,34 +54,34 @@ public class ExtractorService {
         };
         var body = new LinkedMultiValueMap<String, Object>();
         body.add("file", resource);
-        return fetchContent(body);
+        return postForm(body, "/extract", ExtractorResponse.class);
     }
 
     public ExtractorResponse extractMarkdown(String url) {
         var body = new LinkedMultiValueMap<String, Object>();
         body.add("url", url);
-        return fetchContent(body);
+        return postForm(body, "/extract", ExtractorResponse.class);
     }
 
-    private ExtractorResponse fetchContent(MultiValueMap<String, Object> body) {
+    private <T> T postForm(MultiValueMap<String, Object> body, String uri, Class<T> responseType) {
         return restClient
                 .post()
-                .uri("/extract")
+                .uri(uri)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .header("ESCRUTA_INTERNAL_API_KEY", apiKey)
                 .body(body)
                 .retrieve()
                 .onStatus(
-                        HttpStatusCode::is4xxClientError, (request, response) -> {
+                        HttpStatusCode::is4xxClientError, (_, response) -> {
                             throw new RuntimeException("Unauthorized: " + response.getStatusCode());
                         }
                 )
                 .onStatus(
-                        HttpStatusCode::is5xxServerError, (request, response) -> {
+                        HttpStatusCode::is5xxServerError, (_, response) -> {
                             throw new RuntimeException("Server Error: " + response.getStatusCode());
                         }
                 )
-                .body(ExtractorResponse.class);
+                .body(responseType);
     }
 
     private static final Set<String> SUPPORTED_TYPES = Set.of(
