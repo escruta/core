@@ -5,6 +5,7 @@ import com.escruta.core.dtos.ChatReplyMessage;
 import com.escruta.core.dtos.ExampleQuestions;
 import com.escruta.core.dtos.SummaryResponse;
 import com.escruta.core.entities.Conversation;
+import com.escruta.core.entities.Notebook;
 import com.escruta.core.repositories.ConversationRepository;
 import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.services.SourceService;
@@ -18,12 +19,22 @@ import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.document.Document;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import org.springframework.web.server.ResponseStatusException;
 
 import jakarta.validation.Valid;
 
+import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
+
+import org.jspecify.annotations.Nullable;
+import reactor.core.Disposable;
+import reactor.core.scheduler.Schedulers;
 
 @RestController
 @RequestMapping("notebooks/{notebookId}")
@@ -325,5 +336,183 @@ class ChatController {
                 conversation.getTitle(),
                 citedSources
         ));
+    }
+
+    @PostMapping(value = "chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamChat(@PathVariable UUID notebookId, @Valid @RequestBody ChatRequest request) {
+        var notebook = notebookRepository.findById(notebookId).orElse(null);
+        if (notebook == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Notebook not found");
+        }
+
+        SseEmitter emitter = new SseEmitter(300_000L);
+
+        ChatMemory chatMemory = MessageWindowChatMemory
+                .builder()
+                .chatMemoryRepository(chatMemoryRepository)
+                .maxMessages(10)
+                .build();
+
+        var chatClient = ChatClient.builder(chatModel).defaultSystem(UNIFIED_SYSTEM_MESSAGE).defaultAdvisors(
+                MessageChatMemoryAdvisor.builder(chatMemory).build(),
+                retrievalService.getQuestionAnswerAdvisor(notebookId, request.selectedSourceIds())
+        ).build();
+
+        String conversationId = request.conversationId() != null ?
+                request.conversationId() :
+                UUID.randomUUID().toString();
+
+        Conversation existingConversation = conversationRepository.findById(conversationId).orElse(null);
+        boolean isNewConversation = existingConversation == null;
+
+        try {
+            emitter.send(SseEmitter.event().name("conversation").data(Map.of("conversationId", conversationId)));
+        } catch (IOException e) {
+            emitter.completeWithError(e);
+            return emitter;
+        }
+
+        AtomicReference<List<Document>> retrievedDocumentsRef = new AtomicReference<>(List.of());
+        AtomicReference<String> accumulatedText = new AtomicReference<>("");
+
+        Disposable subscription = chatClient
+                .prompt()
+                .advisors(advisorSpec -> advisorSpec.param(ChatMemory.CONVERSATION_ID, conversationId))
+                .user(request.userInput())
+                .stream()
+                .chatResponse()
+                .doOnNext(chatResponse -> {
+                    Object docs = chatResponse.getMetadata().get(CustomQuestionAnswerAdvisor.RETRIEVED_DOCUMENTS);
+                    if (docs instanceof List<?> list && !list.isEmpty() && retrievedDocumentsRef.get().isEmpty()) {
+                        retrievedDocumentsRef.set(safelyCastDocuments(list));
+                    }
+
+                    if (chatResponse.getResult() == null) {
+                        return;
+                    } else {
+                        chatResponse.getResult();
+                    }
+                    String chunk = chatResponse.getResult().getOutput().getText();
+                    if (chunk != null && !chunk.isEmpty()) {
+                        accumulatedText.accumulateAndGet(chunk, String::concat);
+                        try {
+                            emitter.send(SseEmitter.event().name("token").data(chunk));
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                })
+                .doOnError(error -> sendErrorAndComplete(emitter, error))
+                .doOnComplete(() -> Schedulers.boundedElastic().schedule(() -> finalizeStream(
+                        emitter,
+                        notebook,
+                        request.userInput(),
+                        conversationId,
+                        isNewConversation,
+                        existingConversation,
+                        retrievedDocumentsRef.get()
+                )))
+                .subscribe();
+
+        emitter.onCompletion(subscription::dispose);
+        emitter.onTimeout(() -> {
+            subscription.dispose();
+            emitter.complete();
+        });
+        emitter.onError(_ -> subscription.dispose());
+
+        return emitter;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Document> safelyCastDocuments(List<?> list) {
+        return (List<Document>) list;
+    }
+
+    private void finalizeStream(
+            SseEmitter emitter,
+            Notebook notebook,
+            String userInput,
+            String conversationId,
+            boolean isNewConversation,
+            @Nullable Conversation existingConversation,
+            List<Document> retrievedDocuments
+    ) {
+        try {
+            Conversation conversation = isNewConversation ?
+                    new Conversation() :
+                    existingConversation;
+            if (isNewConversation) {
+                conversation.setId(conversationId);
+                conversation.setNotebook(notebook);
+                String title = generateTitle(userInput);
+                title = normalizeTitle(title, userInput);
+                conversation.setTitle(title);
+            }
+            assert conversation != null;
+            conversationRepository.save(conversation);
+
+            List<ChatReplyMessage.CitedSource> citedSources = retrievedDocuments
+                    .stream()
+                    .map(doc -> new ChatReplyMessage.CitedSource(
+                            UUID.fromString(doc.getId()),
+                            UUID.fromString(doc.getMetadata().get("sourceId").toString()),
+                            doc.getMetadata().get("title").toString(),
+                            doc.getText()
+                    ))
+                    .toList();
+
+            emitter.send(SseEmitter.event().name("sources").data(citedSources));
+            if (isNewConversation) {
+                emitter.send(SseEmitter.event().name("title").data(conversation.getTitle()));
+            }
+            emitter.send(SseEmitter.event().name("done").data(""));
+            emitter.complete();
+        } catch (Exception e) {
+            try {
+                emitter.send(SseEmitter.event().name("error").data("Internal error occurred"));
+                emitter.complete();
+            } catch (IOException ignored) {
+                emitter.completeWithError(e);
+            }
+        }
+    }
+
+    @Nullable
+    private String generateTitle(String userInput) {
+        try {
+            return ChatClient
+                    .create(chatModel)
+                    .prompt()
+                    .system("Generate a very short and concise title (maximum 5 words) for a conversation that starts with the following message. Respond ONLY with the title, without quotes or extra punctuation. Use the same language as the user's message.")
+                    .user(userInput)
+                    .call()
+                    .content();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String normalizeTitle(@Nullable String title, String fallback) {
+        if (title == null || title.isBlank()) {
+            title = fallback;
+        }
+        title = title.replaceAll("^[\"']|[\"']$", "");
+        if (title.length() > 100) {
+            title = title.substring(0, 97) + "...";
+        }
+        return title.trim();
+    }
+
+    private void sendErrorAndComplete(SseEmitter emitter, Throwable error) {
+        String message = error.getMessage() != null ?
+                error.getMessage() :
+                "Error generating response";
+        try {
+            emitter.send(SseEmitter.event().name("error").data(message));
+            emitter.complete();
+        } catch (IOException ignored) {
+            emitter.completeWithError(error);
+        }
     }
 }
