@@ -96,21 +96,21 @@ CREATE TABLE notes
     CONSTRAINT fk_notes_users FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
-CREATE TABLE SPRING_AI_CHAT_MEMORY
+CREATE TABLE messages
 (
-    conversation_id varchar(36) NOT NULL,
-    content         text        NOT NULL,
-    type            varchar(10) NOT NULL,
-    `timestamp`     timestamp   NOT NULL,
-    sequence_id     BIGINT      NOT NULL,
-    CONSTRAINT SPRING_AI_CHAT_MEMORY_TYPE_CHECK CHECK (type IN ('USER', 'ASSISTANT', 'SYSTEM', 'TOOL'))
+    id                  bigint       NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    conversation_id     varchar(255) NOT NULL,
+    role                varchar(10)  NOT NULL,
+    content             text         NOT NULL,
+    selected_source_ids text,
+    cited_sources       text,
+    created_at          datetime(6)  NOT NULL,
+    CONSTRAINT messages_role_check CHECK (role IN ('USER', 'ASSISTANT')),
+    CONSTRAINT fk_messages_conversations FOREIGN KEY (conversation_id) REFERENCES conversations (id)
 );
 
-CREATE INDEX SPRING_AI_CHAT_MEMORY_CONVERSATION_ID_TIMESTAMP_IDX
-    ON SPRING_AI_CHAT_MEMORY (conversation_id, `timestamp`);
-
-CREATE INDEX SPRING_AI_CHAT_MEMORY_CONVERSATION_ID_SEQUENCE_ID_IDX
-    ON SPRING_AI_CHAT_MEMORY (conversation_id, sequence_id);
+CREATE INDEX messages_conversation_id_idx
+    ON messages (conversation_id, id);
 
 
 ALTER TABLE conversations

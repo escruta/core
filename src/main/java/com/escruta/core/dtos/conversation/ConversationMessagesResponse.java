@@ -1,5 +1,7 @@
 package com.escruta.core.dtos.conversation;
 
+import com.escruta.core.dtos.ChatReplyMessage;
+
 import java.util.List;
 
 public record ConversationMessagesResponse(
@@ -8,7 +10,9 @@ public record ConversationMessagesResponse(
 ) {
     public record MessageResponse(
             String content,
-            String type
+            String type,
+            List<ChatReplyMessage.CitedSource> citedSources,
+            Integer selectedSourcesCount
     ) {
     }
 }

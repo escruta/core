@@ -3,11 +3,11 @@ package com.escruta.core.controllers;
 import com.escruta.core.dtos.conversation.ConversationMessagesResponse;
 import com.escruta.core.dtos.conversation.ConversationResponse;
 import com.escruta.core.dtos.conversation.ConversationsPageResponse;
+import com.escruta.core.entities.ChatMessage;
 import com.escruta.core.entities.Conversation;
 import com.escruta.core.repositories.ConversationRepository;
+import com.escruta.core.services.ChatMessageService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
-import org.springframework.ai.chat.messages.Message;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,7 +20,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 class ConversationController {
     private final ConversationRepository conversationRepository;
-    private final JdbcChatMemoryRepository chatMemoryRepository;
+    private final ChatMessageService chatMessageService;
 
     @GetMapping
     ResponseEntity<ConversationsPageResponse> getConversations(
@@ -66,11 +66,16 @@ class ConversationController {
             return ResponseEntity.notFound().build();
         }
 
-        List<Message> messages = chatMemoryRepository.findByConversationId(conversationId);
+        List<ChatMessage> messages = chatMessageService.getConversationMessages(conversationId);
 
         var messageResponses = messages
                 .stream()
-                .map(m -> new ConversationMessagesResponse.MessageResponse(m.getText(), m.getMessageType().name()))
+                .map(m -> new ConversationMessagesResponse.MessageResponse(
+                        m.getContent(),
+                        m.getRole(),
+                        chatMessageService.deserializeCitedSources(m),
+                        chatMessageService.deserializeSelectedSourceIds(m).size()
+                ))
                 .toList();
 
         return ResponseEntity.ok(new ConversationMessagesResponse(conversationId, messageResponses));
@@ -84,7 +89,7 @@ class ConversationController {
             return ResponseEntity.notFound().build();
         }
 
-        chatMemoryRepository.deleteByConversationId(conversationId);
+        chatMessageService.deleteByConversationId(conversationId);
         conversationRepository.delete(conversation);
 
         return ResponseEntity.noContent().build();

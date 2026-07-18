@@ -35,12 +35,6 @@ spring:
       port: ${ESCRUTA_KV_PORT:6379}
       password: ${ESCRUTA_KV_PASSWORD:}
   ai:
-    chat:
-      memory:
-        repository:
-          jdbc:
-            initialize-schema: never
-            platform: mysql
     openai:
       base-url: ${ESCRUTA_AI_BASE_URL:}
       api-key: ${ESCRUTA_AI_API_KEY:}

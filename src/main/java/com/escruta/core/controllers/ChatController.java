@@ -10,13 +10,13 @@ import com.escruta.core.repositories.ConversationRepository;
 import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.services.SourceService;
 import com.escruta.core.services.RetrievalService;
+import com.escruta.core.services.ChatMessageService;
+import com.escruta.core.services.JpaChatMemory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import com.escruta.core.services.CustomQuestionAnswerAdvisor;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
-import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.document.Document;
 import org.springframework.http.HttpStatus;
@@ -39,7 +39,7 @@ import reactor.core.scheduler.Schedulers;
 @RestController
 @RequestMapping("notebooks/{notebookId}")
 @RequiredArgsConstructor
-class ChatController {
+public class ChatController {
     private static final String UNIFIED_SYSTEM_MESSAGE = """
             You are a helpful AI assistant. Answer questions using ONLY the provided sources.
             
@@ -74,7 +74,8 @@ class ChatController {
     private final ChatModel chatModel;
     private final NotebookRepository notebookRepository;
     private final ConversationRepository conversationRepository;
-    private final JdbcChatMemoryRepository chatMemoryRepository;
+    private final JpaChatMemory chatMemory;
+    private final ChatMessageService chatMessageService;
 
     private Optional<String> getNotebookContext(UUID notebookId, int documentLimit) {
         if (sourceService.hasNoSources(notebookId)) {
@@ -260,12 +261,6 @@ class ChatController {
             return ResponseEntity.notFound().build();
         }
 
-        ChatMemory chatMemory = MessageWindowChatMemory
-                .builder()
-                .chatMemoryRepository(chatMemoryRepository)
-                .maxMessages(10)
-                .build();
-
         var chatClient = ChatClient.builder(chatModel).defaultSystem(UNIFIED_SYSTEM_MESSAGE).defaultAdvisors(
                 MessageChatMemoryAdvisor.builder(chatMemory).build(),
                 retrievalService.getQuestionAnswerAdvisor(notebookId, request.selectedSourceIds())
@@ -323,15 +318,24 @@ class ChatController {
         List<ChatReplyMessage.CitedSource> citedSources = documents
                 .stream()
                 .map(doc -> new ChatReplyMessage.CitedSource(
-                        UUID.fromString(doc.getId()),
-                        UUID.fromString(doc.getMetadata().get("sourceId").toString()),
+                        doc.getId(),
+                        doc.getMetadata().get("sourceId").toString(),
                         doc.getMetadata().get("title").toString(),
                         doc.getText()
                 ))
                 .toList();
 
+        String assistantContent = Objects.requireNonNull(chatResponse.getResult()).getOutput().getText();
+        chatMessageService.saveConversationTurn(
+                conversation,
+                request.userInput(),
+                request.selectedSourceIds(),
+                assistantContent,
+                citedSources
+        );
+
         return ResponseEntity.ok(new ChatReplyMessage(
-                Objects.requireNonNull(chatResponse.getResult()).getOutput().getText(),
+                assistantContent,
                 conversationId,
                 conversation.getTitle(),
                 citedSources
@@ -346,12 +350,6 @@ class ChatController {
         }
 
         SseEmitter emitter = new SseEmitter(300_000L);
-
-        ChatMemory chatMemory = MessageWindowChatMemory
-                .builder()
-                .chatMemoryRepository(chatMemoryRepository)
-                .maxMessages(10)
-                .build();
 
         var chatClient = ChatClient.builder(chatModel).defaultSystem(UNIFIED_SYSTEM_MESSAGE).defaultAdvisors(
                 MessageChatMemoryAdvisor.builder(chatMemory).build(),
@@ -410,7 +408,9 @@ class ChatController {
                         conversationId,
                         isNewConversation,
                         existingConversation,
-                        retrievedDocumentsRef.get()
+                        retrievedDocumentsRef.get(),
+                        accumulatedText.get(),
+                        request.selectedSourceIds()
                 )))
                 .subscribe();
 
@@ -436,7 +436,9 @@ class ChatController {
             String conversationId,
             boolean isNewConversation,
             @Nullable Conversation existingConversation,
-            List<Document> retrievedDocuments
+            List<Document> retrievedDocuments,
+            String assistantContent,
+            List<UUID> selectedSourceIds
     ) {
         try {
             Conversation conversation = isNewConversation ?
@@ -455,12 +457,20 @@ class ChatController {
             List<ChatReplyMessage.CitedSource> citedSources = retrievedDocuments
                     .stream()
                     .map(doc -> new ChatReplyMessage.CitedSource(
-                            UUID.fromString(doc.getId()),
-                            UUID.fromString(doc.getMetadata().get("sourceId").toString()),
+                            doc.getId(),
+                            doc.getMetadata().get("sourceId").toString(),
                             doc.getMetadata().get("title").toString(),
                             doc.getText()
                     ))
                     .toList();
+
+            chatMessageService.saveConversationTurn(
+                    conversation,
+                    userInput,
+                    selectedSourceIds,
+                    assistantContent,
+                    citedSources
+            );
 
             emitter.send(SseEmitter.event().name("sources").data(citedSources));
             if (isNewConversation) {
