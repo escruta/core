@@ -19,21 +19,9 @@ public class Note {
     @Column(nullable = false)
     private UUID id;
 
-    @ManyToOne
-    @JoinColumn()
-    private Notebook notebook;
-
-    @ManyToOne
-    @JoinColumn()
-    private Folder folder;
-
-    @ManyToOne
+    @ManyToOne(optional = false)
     @JoinColumn(nullable = false)
-    private User user;
-
-    @OneToOne
-    @JoinColumn()
-    private Source source;
+    private Notebook notebook;
 
     @Column(nullable = false)
     private String title;

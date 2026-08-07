@@ -56,7 +56,7 @@ class NoteServiceTest {
         Note note2 = createNote(UUID.randomUUID(), "Note 2", "Content 2", notebook);
 
         when(userService.getCurrentUser()).thenReturn(user);
-        when(noteRepository.findByNotebookIdAndUserId(NOTEBOOK_ID, user.getId())).thenReturn(Arrays.asList(
+        when(noteRepository.findByNotebookIdAndNotebook_UserId(NOTEBOOK_ID, user.getId())).thenReturn(Arrays.asList(
                 note1,
                 note2
         ));
@@ -69,14 +69,15 @@ class NoteServiceTest {
     }
 
     @Test
-    @DisplayName("Should return list of all notes for user when notebookId is null")
-    void getNotes_shouldReturnListOfNotesWithoutNotebookId() {
+    @DisplayName("Should return all notes for the user's notebooks when notebookId is null")
+    void getNotes_shouldReturnListOfAllUserNotesWhenNotebookIdIsNull() {
         User user = createUser();
-        Note note1 = createNote(NOTE_ID, "Note 1", "Content 1", null);
-        Note note2 = createNote(UUID.randomUUID(), "Note 2", "Content 2", null);
+        Notebook notebook = createNotebook();
+        Note note1 = createNote(NOTE_ID, "Note 1", "Content 1", notebook);
+        Note note2 = createNote(UUID.randomUUID(), "Note 2", "Content 2", notebook);
 
         when(userService.getCurrentUser()).thenReturn(user);
-        when(noteRepository.findByUserId(user.getId())).thenReturn(Arrays.asList(note1, note2));
+        when(noteRepository.findByNotebook_UserId(user.getId())).thenReturn(Arrays.asList(note1, note2));
 
         List<NoteResponseDTO> result = noteService.getNotes(null);
 
@@ -88,7 +89,7 @@ class NoteServiceTest {
     void getNotes_shouldReturnEmptyListWhenNoNotes() {
         User user = createUser();
         when(userService.getCurrentUser()).thenReturn(user);
-        when(noteRepository.findByNotebookIdAndUserId(NOTEBOOK_ID, USER_ID)).thenReturn(List.of());
+        when(noteRepository.findByNotebookIdAndNotebook_UserId(NOTEBOOK_ID, USER_ID)).thenReturn(List.of());
 
         List<NoteResponseDTO> result = noteService.getNotes(NOTEBOOK_ID);
 
@@ -103,7 +104,7 @@ class NoteServiceTest {
         List<NoteResponseDTO> result = noteService.getNotes(NOTEBOOK_ID);
 
         assertThat(result).isEmpty();
-        verify(noteRepository, never()).findByNotebookIdAndUserId(any(), any());
+        verify(noteRepository, never()).findByNotebookIdAndNotebook_UserId(any(), any());
     }
 
     @Test
@@ -119,6 +120,7 @@ class NoteServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.title()).isEqualTo("Test Note");
         assertThat(result.content()).isEqualTo("Test Content");
+        assertThat(result.notebookId()).isEqualTo(NOTEBOOK_ID);
     }
 
     @Test
@@ -134,15 +136,12 @@ class NoteServiceTest {
     @Test
     @DisplayName("Should add note to notebook successfully")
     void addNote_shouldAddNoteToNotebookSuccessfully() {
-        NoteCreationDTO dto = new NoteCreationDTO(NOTEBOOK_ID, null, "New Note", "New Content");
+        NoteCreationDTO dto = new NoteCreationDTO(NOTEBOOK_ID, "New Note", "New Content");
         Notebook notebook = createNotebook();
-        User user = createUser();
         Note note = createNote(NOTE_ID, "New Note", "New Content", notebook);
-        note.setUser(user);
 
-        when(userService.getCurrentUser()).thenReturn(user);
         when(notebookRepository.findById(NOTEBOOK_ID)).thenReturn(Optional.of(notebook));
-        when(noteMapper.toNote(dto, notebook, user)).thenReturn(note);
+        when(noteMapper.toNote(dto, notebook)).thenReturn(note);
         when(noteRepository.save(note)).thenReturn(note);
 
         NoteResponseDTO result = noteService.addNote(dto);
@@ -153,45 +152,9 @@ class NoteServiceTest {
     }
 
     @Test
-    @DisplayName("Should add standalone note successfully")
-    void addNote_shouldAddStandaloneNoteSuccessfully() {
-        NoteCreationDTO dto = new NoteCreationDTO(null, null, "New Note", "New Content");
-        User user = createUser();
-        Note note = createNote(NOTE_ID, "New Note", "New Content", null);
-        note.setUser(user);
-
-        when(userService.getCurrentUser()).thenReturn(user);
-        when(noteMapper.toNote(dto, null, user)).thenReturn(note);
-        when(noteRepository.save(note)).thenReturn(note);
-
-        NoteResponseDTO result = noteService.addNote(dto);
-
-        assertThat(result).isNotNull();
-        assertThat(result.title()).isEqualTo("New Note");
-        verify(noteRepository).save(note);
-    }
-
-    @Test
-    @DisplayName("Should return null when adding note to non-existent notebook")
-    void addNote_shouldReturnNullWhenNotebookNotFound() {
-        NoteCreationDTO dto = new NoteCreationDTO(NOTEBOOK_ID, null, "New Note", "New Content");
-        User user = createUser();
-
-        when(userService.getCurrentUser()).thenReturn(user);
-        when(notebookRepository.findById(NOTEBOOK_ID)).thenReturn(Optional.empty());
-
-        NoteResponseDTO result = noteService.addNote(dto);
-
-        assertThat(result).isNull();
-        verify(noteRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("Should return null when user is not authenticated on add")
-    void addNote_shouldReturnNullWhenUserNotAuthenticated() {
-        NoteCreationDTO dto = new NoteCreationDTO(NOTEBOOK_ID, null, "New Note", "New Content");
-
-        when(userService.getCurrentUser()).thenReturn(null);
+    @DisplayName("Should return null when adding note without notebook")
+    void addNote_shouldReturnNullWhenNoNotebook() {
+        NoteCreationDTO dto = new NoteCreationDTO(null, "New Note", "New Content");
 
         NoteResponseDTO result = noteService.addNote(dto);
 
@@ -201,13 +164,25 @@ class NoteServiceTest {
     }
 
     @Test
+    @DisplayName("Should return null when adding note to non-existent notebook")
+    void addNote_shouldReturnNullWhenNotebookNotFound() {
+        NoteCreationDTO dto = new NoteCreationDTO(NOTEBOOK_ID, "New Note", "New Content");
+
+        when(notebookRepository.findById(NOTEBOOK_ID)).thenReturn(Optional.empty());
+
+        NoteResponseDTO result = noteService.addNote(dto);
+
+        assertThat(result).isNull();
+        verify(noteRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("Should update note successfully")
     void updateNote_shouldUpdateNoteSuccessfully() {
         String noteIdStr = NOTE_ID.toString();
-        NoteUpdateDTO dto = new NoteUpdateDTO(noteIdStr, null, null, "Updated Note", "Updated Content");
+        NoteUpdateDTO dto = new NoteUpdateDTO(noteIdStr, "Updated Note", "Updated Content");
         Notebook notebook = createNotebook();
         Note existingNote = createNote(NOTE_ID, "Old Note", "Old Content", notebook);
-        existingNote.setUser(createUser());
 
         when(noteRepository.findById(NOTE_ID)).thenReturn(Optional.of(existingNote));
 
@@ -222,7 +197,7 @@ class NoteServiceTest {
     @DisplayName("Should return null when updating non-existent note")
     void updateNote_shouldReturnNullWhenNoteNotFound() {
         String noteIdStr = NOTE_ID.toString();
-        NoteUpdateDTO dto = new NoteUpdateDTO(noteIdStr, null, null, "Updated Note", "Updated Content");
+        NoteUpdateDTO dto = new NoteUpdateDTO(noteIdStr, "Updated Note", "Updated Content");
 
         when(noteRepository.findById(NOTE_ID)).thenReturn(Optional.empty());
 
@@ -237,7 +212,6 @@ class NoteServiceTest {
     void deleteNote_shouldDeleteNoteSuccessfully() {
         Notebook notebook = createNotebook();
         Note note = createNote(NOTE_ID, "Note to Delete", "Content", notebook);
-        note.setUser(createUser());
 
         when(noteRepository.findById(NOTE_ID)).thenReturn(Optional.of(note));
 

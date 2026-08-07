@@ -8,8 +8,6 @@ import java.util.UUID;
 public record NoteResponseDTO(
         UUID id,
         UUID notebookId,
-        UUID folderId,
-        UUID sourceId,
         String title,
         Timestamp createdAt,
         Timestamp updatedAt
@@ -17,15 +15,7 @@ public record NoteResponseDTO(
     public NoteResponseDTO(Note note) {
         this(
                 note.getId(),
-                note.getNotebook() != null ?
-                        note.getNotebook().getId() :
-                        null,
-                note.getFolder() != null ?
-                        note.getFolder().getId() :
-                        null,
-                note.getSource() != null ?
-                        note.getSource().getId() :
-                        null,
+                note.getNotebook().getId(),
                 note.getTitle(),
                 note.getCreatedAt(),
                 note.getUpdatedAt()

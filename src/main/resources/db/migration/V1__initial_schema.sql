@@ -84,16 +84,10 @@ CREATE TABLE notes
     created_at  datetime(6),
     updated_at  datetime(6),
     id          binary(16)   NOT NULL PRIMARY KEY,
-    notebook_id binary(16)   NULL,
-    folder_id   binary(16)   NULL,
-    user_id     binary(16)   NOT NULL,
-    source_id   binary(16) UNIQUE,
+    notebook_id binary(16)   NOT NULL,
     content     longtext,
     title       varchar(255) NOT NULL,
-    CONSTRAINT fk_notes_folders FOREIGN KEY (folder_id) REFERENCES folders (id) ON DELETE SET NULL,
-    CONSTRAINT fk814tu72hqd3m67ramoipdr0qq FOREIGN KEY (notebook_id) REFERENCES notebooks (id),
-    CONSTRAINT fkka3wrcqyt11gt9qyvbpkuah7 FOREIGN KEY (source_id) REFERENCES sources (id),
-    CONSTRAINT fk_notes_users FOREIGN KEY (user_id) REFERENCES users (id)
+    CONSTRAINT fk814tu72hqd3m67ramoipdr0qq FOREIGN KEY (notebook_id) REFERENCES notebooks (id)
 );
 
 CREATE TABLE messages
