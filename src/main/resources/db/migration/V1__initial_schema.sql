@@ -106,6 +106,31 @@ CREATE TABLE messages
 CREATE INDEX messages_conversation_id_idx
     ON messages (conversation_id, id);
 
+CREATE TABLE source_jobs
+(
+    completed_at  timestamp(6) NULL,
+    created_at    timestamp(6) NULL,
+    updated_at    timestamp(6) NULL,
+    id            binary(16)   NOT NULL PRIMARY KEY,
+    source_id     binary(16)   NULL,
+    notebook_id   binary(16)   NULL,
+    file_path     varchar(1024),
+    file_name     varchar(255),
+    error_message text,
+    result        longtext,
+    status        varchar(255) NOT NULL,
+    type          varchar(255) NOT NULL,
+    CONSTRAINT source_jobs_status_check CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
+    CONSTRAINT source_jobs_type_check CHECK (type IN ('EXTRACT', 'SOURCE_SUMMARY', 'NOTEBOOK_SUMMARY')),
+    CONSTRAINT fk_source_jobs_source FOREIGN KEY (source_id) REFERENCES sources (id) ON DELETE CASCADE,
+    CONSTRAINT fk_source_jobs_notebook FOREIGN KEY (notebook_id) REFERENCES notebooks (id) ON DELETE CASCADE
+);
+
+CREATE INDEX source_jobs_source_idx
+    ON source_jobs (source_id, type, status);
+
+CREATE INDEX source_jobs_notebook_idx
+    ON source_jobs (notebook_id, type, status);
 
 ALTER TABLE conversations
     ADD CONSTRAINT fka2jxphva2eexgctoqxgpl4krc FOREIGN KEY (notebook_id) REFERENCES notebooks (id);

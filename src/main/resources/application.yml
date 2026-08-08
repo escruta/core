@@ -71,3 +71,5 @@ services:
   helper:
     base-url: ${ESCRUTA_HELPER_URL:http://localhost:8000}
     api-key: ${ESCRUTA_HELPER_API_KEY:}
+  source-uploads:
+    dir: ${ESCRUTA_UPLOADS_DIR:${java.io.tmpdir}/escruta-uploads}

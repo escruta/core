@@ -4,6 +4,7 @@ import com.escruta.core.dtos.ChatRequest;
 import com.escruta.core.dtos.ChatReplyMessage;
 import com.escruta.core.dtos.ExampleQuestions;
 import com.escruta.core.dtos.SummaryResponse;
+import com.escruta.core.dtos.tools.JobStartedResponse;
 import com.escruta.core.entities.Conversation;
 import com.escruta.core.entities.Notebook;
 import com.escruta.core.repositories.ConversationRepository;
@@ -12,6 +13,7 @@ import com.escruta.core.services.SourceService;
 import com.escruta.core.services.RetrievalService;
 import com.escruta.core.services.ChatMessageService;
 import com.escruta.core.services.JpaChatMemory;
+import com.escruta.core.services.SourceJobService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import com.escruta.core.services.CustomQuestionAnswerAdvisor;
@@ -55,20 +57,6 @@ public class ChatController {
                - NEVER use parentheses like (\\alpha) or (|0\\rangle)
             """;
 
-    private static final String UNIFIED_SUMMARY_SYSTEM_MESSAGE = """
-            You are an expert at identifying the core essence and central themes of a set of study materials.
-            Your task is to write a comprehensive summary paragraph of 4-6 lines about the central subject matter of this notebook.
-            
-            RULES:
-            - Focus on the **CENTRAL THEME** and **UNIFYING CONCEPTS** of all provided sources
-            - Identify the main subject and its most significant aspects
-            - Use **bold** for key terms and *italic* for emphasis (sparingly)
-            - Write as if explaining the topic directly to a student, providing a clear bird's-eye view
-            - Do NOT start with phrases like "The articles...", "The sources...", "This content..." or similar
-            - Start directly with the core subject matter (e.g., "Quantum computing is a field that...")
-            - Ensure the summary provides a cohesive understanding of how the various pieces of information relate to each other
-            """;
-
     private final SourceService sourceService;
     private final RetrievalService retrievalService;
     private final ChatModel chatModel;
@@ -76,6 +64,7 @@ public class ChatController {
     private final ConversationRepository conversationRepository;
     private final JpaChatMemory chatMemory;
     private final ChatMessageService chatMessageService;
+    private final SourceJobService sourceJobService;
 
     private Optional<String> getNotebookContext(UUID notebookId, int documentLimit) {
         if (sourceService.hasNoSources(notebookId)) {
@@ -109,70 +98,21 @@ public class ChatController {
     }
 
     @PostMapping("summary")
-    ResponseEntity<SummaryResponse> generateSummary(@PathVariable UUID notebookId) {
-        Optional<String> contextOpt = getNotebookContext(notebookId, 20);
-
-        if (contextOpt.isEmpty()) {
-            throw new IllegalStateException("No sources available or content not yet indexed");
+    ResponseEntity<JobStartedResponse> generateSummary(@PathVariable UUID notebookId) {
+        var notebook = notebookRepository.findById(notebookId).orElse(null);
+        if (notebook == null) {
+            return ResponseEntity.notFound().build();
         }
 
-        String context = contextOpt.get();
         notebookRepository.updateSummary(notebookId, null);
 
-        int chunkSize = 50000;
-        String finalSummaryText;
-
-        if (context.length() > chunkSize) {
-            StringBuilder intermediateSummaries = new StringBuilder();
-            int start = 0;
-            while (start < context.length()) {
-                int end = Math.min(start + chunkSize, context.length());
-                String chunk = context.substring(start, end);
-
-                SummaryResponse chunkSummary = ChatClient
-                        .create(chatModel)
-                        .prompt()
-                        .system(UNIFIED_SUMMARY_SYSTEM_MESSAGE)
-                        .user("Analyze the following materials and write a high-level summary that captures the central theme and core concepts of this subject matter:\n\n" + chunk)
-                        .call()
-                        .entity(SummaryResponse.class);
-
-                if (chunkSummary != null && chunkSummary.summary() != null) {
-                    intermediateSummaries.append(chunkSummary.summary()).append("\n\n");
-                }
-                start = end;
-            }
-
-            SummaryResponse finalSummary = ChatClient
-                    .create(chatModel)
-                    .prompt()
-                    .system(UNIFIED_SUMMARY_SYSTEM_MESSAGE)
-                    .user("Analyze the following materials (which are partial summaries) and write a single, cohesive high-level summary that captures the central theme and core concepts of the entire subject matter:\n\n" + intermediateSummaries)
-                    .call()
-                    .entity(SummaryResponse.class);
-            finalSummaryText = finalSummary != null ?
-                    finalSummary.summary() :
-                    null;
-
-        } else {
-            SummaryResponse summary = ChatClient
-                    .create(chatModel)
-                    .prompt()
-                    .system(UNIFIED_SUMMARY_SYSTEM_MESSAGE)
-                    .user("Analyze the following materials and write a high-level summary that captures the central theme and core concepts of this subject matter:\n\n" + context)
-                    .call()
-                    .entity(SummaryResponse.class);
-            finalSummaryText = summary != null ?
-                    summary.summary() :
-                    null;
-        }
-
-        if (finalSummaryText == null || finalSummaryText.trim().isEmpty()) {
-            throw new RuntimeException("Failed to generate summary: empty response from AI");
-        }
-
-        notebookRepository.updateSummary(notebookId, finalSummaryText);
-        return ResponseEntity.ok(new SummaryResponse(finalSummaryText));
+        var job = sourceJobService.startNotebookSummaryJob(notebook);
+        return ResponseEntity
+                .accepted()
+                .body(new JobStartedResponse(
+                        job.getId(),
+                        "Summary generation started. It will be published via SSE when ready."
+                ));
     }
 
     @GetMapping("summary")

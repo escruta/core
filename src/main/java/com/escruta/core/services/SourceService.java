@@ -6,30 +6,29 @@ import com.escruta.core.dtos.source.SourceResponseDTO;
 import com.escruta.core.dtos.source.SourceTextCreationDTO;
 import com.escruta.core.dtos.source.SourceUpdateDTO;
 import com.escruta.core.dtos.source.SourceWithContentDTO;
+import com.escruta.core.dtos.tools.JobStartedResponse;
 import com.escruta.core.entities.Notebook;
 import com.escruta.core.entities.Source;
+import com.escruta.core.entities.SourceJob;
 import com.escruta.core.entities.enums.SourceStatus;
 import com.escruta.core.mappers.SourceMapper;
 import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.repositories.SourceRepository;
 import jakarta.persistence.EntityNotFoundException;
-import org.springframework.ai.chat.messages.SystemMessage;
-import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import com.escruta.core.events.SourceDeletedEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 import lombok.RequiredArgsConstructor;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -37,10 +36,12 @@ public class SourceService {
     private final SourceRepository sourceRepository;
     private final NotebookRepository notebookRepository;
     private final SourceMapper sourceMapper;
-    private final ChatModel chatModel;
     private final HelperService helperService;
-    private final AsyncVectorIndexingService asyncVectorIndexingService;
+    private final SourceJobService sourceJobService;
     private final ApplicationEventPublisher eventPublisher;
+
+    @Value("${services.source-uploads.dir}")
+    private String uploadDir;
 
     public boolean hasNoSources(UUID notebookId) {
         return !sourceRepository.existsByNotebookId(notebookId);
@@ -71,36 +72,7 @@ public class SourceService {
         source.setStatus(SourceStatus.PENDING);
         source = sourceRepository.save(source);
 
-        final UUID finalSourceId = source.getId();
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                CompletableFuture.runAsync(() -> {
-                    try {
-                        var response = helperService.extractMarkdown(newSourceDto.link());
-
-                        Source updatedSource = sourceRepository.findById(finalSourceId).orElseThrow();
-                        asyncVectorIndexingService.indexSourceInVectorStore(
-                                notebookId,
-                                finalSourceId,
-                                response.title(),
-                                newSourceDto.link(),
-                                response.content()
-                        );
-
-                        updatedSource.setTitle(response.title());
-                        updatedSource.setContent(response.content());
-                        updatedSource.setStatus(SourceStatus.READY);
-                        sourceRepository.save(updatedSource);
-                    } catch (Exception e) {
-                        sourceRepository.findById(finalSourceId).ifPresent(s -> {
-                            s.setStatus(SourceStatus.FAILED);
-                            sourceRepository.save(s);
-                        });
-                    }
-                });
-            }
-        });
+        sourceJobService.startExtractJob(source, null, null);
 
         return new SourceWithContentDTO(source);
     }
@@ -156,47 +128,22 @@ public class SourceService {
         source.setStatus(SourceStatus.PENDING);
         source = sourceRepository.save(source);
 
-        final UUID finalSourceId = source.getId();
-        final byte[] fileBytes;
-        final String filename;
-        try {
-            fileBytes = file.getBytes();
-            filename = file.getOriginalFilename();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to read file bytes: " + e.getMessage(), e);
-        }
-
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                CompletableFuture.runAsync(() -> {
-                    try {
-                        var response = helperService.extractMarkdown(fileBytes, filename);
-
-                        Source updatedSource = sourceRepository.findById(finalSourceId).orElseThrow();
-                        asyncVectorIndexingService.indexSourceInVectorStore(
-                                notebookId,
-                                finalSourceId,
-                                updatedSource.getTitle(),
-                                updatedSource.getLink(),
-                                response.content()
-                        );
-
-                        updatedSource.setTitle(response.title());
-                        updatedSource.setContent(response.content());
-                        updatedSource.setStatus(SourceStatus.READY);
-                        sourceRepository.save(updatedSource);
-                    } catch (Exception e) {
-                        sourceRepository.findById(finalSourceId).ifPresent(s -> {
-                            s.setStatus(SourceStatus.FAILED);
-                            sourceRepository.save(s);
-                        });
-                    }
-                });
-            }
-        });
+        String fileName = file.getOriginalFilename();
+        Path tempFile = writeUploadToTemp(file);
+        sourceJobService.startExtractJob(source, tempFile.toString(), fileName);
 
         return new SourceWithContentDTO(source);
+    }
+
+    private Path writeUploadToTemp(MultipartFile file) {
+        try {
+            Files.createDirectories(Path.of(uploadDir));
+            Path temp = Files.createTempFile(Path.of(uploadDir), "upload-", ".bin");
+            file.transferTo(temp);
+            return temp;
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to store file: " + e.getMessage(), e);
+        }
     }
 
     @Transactional
@@ -211,55 +158,13 @@ public class SourceService {
         source.setStatus(SourceStatus.PENDING);
         source = sourceRepository.save(source);
 
-        final UUID finalSourceId = source.getId();
-
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                CompletableFuture.runAsync(() -> {
-                    try {
-                        Source updatedSource = sourceRepository.findById(finalSourceId).orElseThrow();
-                        asyncVectorIndexingService.indexSourceInVectorStore(
-                                notebookId,
-                                finalSourceId,
-                                updatedSource.getTitle(),
-                                null,
-                                updatedSource.getContent()
-                        );
-
-                        updatedSource.setStatus(SourceStatus.READY);
-                        sourceRepository.save(updatedSource);
-                    } catch (Exception e) {
-                        sourceRepository.findById(finalSourceId).ifPresent(s -> {
-                            s.setStatus(SourceStatus.FAILED);
-                            sourceRepository.save(s);
-                        });
-                    }
-                });
-            }
-        });
+        sourceJobService.startExtractJob(source, null, null);
 
         return new SourceWithContentDTO(source);
     }
 
-    private static Prompt getPrompt(String content) {
-        String systemPrompt = """
-                You are an expert at distilling complex information into clear, concise summaries.
-                Your task is to create a summary of the provided content that captures its essential information and main points.
-                
-                RULES:
-                - Write a concise paragraph of 2-3 sentences.
-                - Focus on the **key concepts**, **findings**, or **conclusions**.
-                - Use **bold** for key terms and *italic* for emphasis (sparingly).
-                - Start directly with the subject matter.
-                - Do NOT use introductory phrases like "This content discusses..." or "The author says...".
-                """;
-
-        UserMessage userMessage = new UserMessage(content);
-        return new Prompt(List.of(new SystemMessage(systemPrompt), userMessage));
-    }
-
-    public String generateSummary(UUID notebookId, UUID sourceId) {
+    @Transactional
+    public JobStartedResponse generateSummary(UUID notebookId, UUID sourceId) {
         Optional<Source> sourceOptional = sourceRepository.findById(sourceId);
         if (sourceOptional.isEmpty()) {
             throw new EntityNotFoundException("Source not found with id: " + sourceId);
@@ -273,33 +178,11 @@ public class SourceService {
         source.setSummary(null);
         sourceRepository.save(source);
 
-        String content = source.getContent();
-        String summary;
-        int chunkSize = 50000;
-
-        if (content != null && content.length() > chunkSize) {
-            StringBuilder intermediateSummaries = new StringBuilder();
-            int start = 0;
-            while (start < content.length()) {
-                int end = Math.min(start + chunkSize, content.length());
-                String chunk = content.substring(start, end);
-                var response = chatModel.call(getPrompt(chunk));
-                intermediateSummaries.append(response.getResult().getOutput().getText()).append("\n\n");
-                start = end;
-            }
-            var finalResponse = chatModel.call(getPrompt(intermediateSummaries.toString()));
-            summary = finalResponse.getResult().getOutput().getText();
-        } else {
-            Prompt prompt = getPrompt(content != null ?
-                    content :
-                    "");
-            var response = chatModel.call(prompt);
-            summary = response.getResult().getOutput().getText();
-        }
-
-        source.setSummary(summary);
-        sourceRepository.save(source);
-        return summary;
+        SourceJob job = sourceJobService.startSourceSummaryJob(source);
+        return new JobStartedResponse(
+                job.getId(),
+                "Summary generation started. It will be published via SSE when ready."
+        );
     }
 
     public String getSummary(UUID notebookId, UUID sourceId) {

@@ -4,8 +4,9 @@ import com.escruta.core.dtos.ExtractorResponse;
 import com.escruta.core.dtos.SearchResponse;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -14,6 +15,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 
+import java.io.File;
 import java.net.http.HttpClient;
 import java.util.Set;
 
@@ -45,10 +47,10 @@ public class HelperService {
         return postForm(body, "/search", SearchResponse.class);
     }
 
-    public ExtractorResponse extractMarkdown(byte[] fileBytes, String filename) {
-        var resource = new ByteArrayResource(fileBytes) {
+    public ExtractorResponse extractMarkdown(File file, String filename) {
+        var resource = new FileSystemResource(file) {
             @Override
-            public String getFilename() {
+            public @NonNull String getFilename() {
                 return filename;
             }
         };

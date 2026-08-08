@@ -7,6 +7,7 @@ import com.escruta.core.dtos.source.SourceResponseDTO;
 import com.escruta.core.dtos.source.SourceTextCreationDTO;
 import com.escruta.core.dtos.source.SourceUpdateDTO;
 import com.escruta.core.dtos.source.SourceWithContentDTO;
+import com.escruta.core.dtos.tools.JobStartedResponse;
 import com.escruta.core.services.SourceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -110,12 +111,12 @@ public class SourceController {
     }
 
     @PostMapping("{sourceId}/summary")
-    public ResponseEntity<SummaryResponse> generateSourceSummary(
+    public ResponseEntity<JobStartedResponse> generateSourceSummary(
             @PathVariable UUID notebookId,
             @PathVariable UUID sourceId
     ) {
-        String summary = sourceService.generateSummary(notebookId, sourceId);
-        return ResponseEntity.ok(new SummaryResponse(summary));
+        var job = sourceService.generateSummary(notebookId, sourceId);
+        return ResponseEntity.accepted().body(job);
     }
 
     @GetMapping("{sourceId}/summary")

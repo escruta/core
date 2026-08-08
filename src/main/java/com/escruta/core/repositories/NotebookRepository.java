@@ -25,6 +25,9 @@ public interface NotebookRepository extends JpaRepository<Notebook, UUID> {
 
     boolean existsByIdAndUserId(UUID notebookId, UUID userId);
 
+    @Query("select n.user.id from Notebook n where n.id = :notebookId")
+    UUID findOwnerId(UUID notebookId);
+
     @Transactional
     @Modifying
     @Query("UPDATE Notebook n SET n.summary = :summary WHERE n.id = :notebookId")
