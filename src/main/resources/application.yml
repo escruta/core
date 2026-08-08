@@ -61,7 +61,7 @@ logging:
     org.springframework.ai.retry.autoconfigure: ERROR
 security:
   session:
-    expiration-interval-seconds: 3600
+    expiration-interval-seconds: ${ESCRUTA_SESSION_EXPIRATION_SECONDS:3600}
   cors:
     allowedOrigins: ${ESCRUTA_CORS_ALLOWED_ORIGINS:*}
     allowedMethods: GET,POST,PUT,PATCH,DELETE,OPTIONS
