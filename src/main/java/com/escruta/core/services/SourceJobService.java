@@ -249,35 +249,35 @@ public class SourceJobService {
 
     private UUID processNotebookSummary(SourceJob job) throws Exception {
         UUID notebookId = job.getNotebook().getId();
-        if (!sourceRepository.existsByNotebookId(notebookId)) {
+        if (sourceRepository.existsByNotebookId(notebookId)) {
+            String query = "core concepts key ideas summary main topic definitions overview";
+            List<Document> documents = retrievalService.getDocumentsForNotebook(notebookId, query, 20);
+            if (documents.isEmpty()) {
+                Thread.sleep(1000);
+                documents = retrievalService.getDocumentsForNotebook(notebookId, query, 20);
+                if (documents.isEmpty()) {
+                    throw new IllegalStateException("No sources available or content not yet indexed");
+                }
+            }
+
+            String context = documents
+                    .stream()
+                    .map(Document::getText)
+                    .filter(text -> text != null && !text.isBlank())
+                    .reduce((a, b) -> a + "\n\n" + b)
+                    .orElse("");
+            if (context.isBlank()) {
+                throw new IllegalStateException("No content available");
+            }
+
+            String summary = summarizeNotebook(context);
+            notebookRepository.updateSummary(notebookId, summary);
+            job.setResult(summary);
+
+            return notebookRepository.findOwnerId(notebookId);
+        } else {
             throw new IllegalStateException("No sources available or content not yet indexed");
         }
-
-        String query = "core concepts key ideas summary main topic definitions overview";
-        List<Document> documents = retrievalService.getDocumentsForNotebook(notebookId, query, 20);
-        if (documents.isEmpty()) {
-            Thread.sleep(1000);
-            documents = retrievalService.getDocumentsForNotebook(notebookId, query, 20);
-            if (documents.isEmpty()) {
-                throw new IllegalStateException("No sources available or content not yet indexed");
-            }
-        }
-
-        String context = documents
-                .stream()
-                .map(Document::getText)
-                .filter(text -> text != null && !text.isBlank())
-                .reduce((a, b) -> a + "\n\n" + b)
-                .orElse("");
-        if (context.isBlank()) {
-            throw new IllegalStateException("No content available");
-        }
-
-        String summary = summarizeNotebook(context);
-        notebookRepository.updateSummary(notebookId, summary);
-        job.setResult(summary);
-
-        return notebookRepository.findOwnerId(notebookId);
     }
 
     private String summarizeInChunks(String content, String systemPrompt) {
