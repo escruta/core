@@ -79,6 +79,13 @@ tasks.withType<Test> {
     finalizedBy(tasks.jacocoTestReport)
 }
 
+tasks.withType<JavaExec> {
+    jvmArgs(
+        "--enable-native-access=ALL-UNNAMED",
+        "--sun-misc-unsafe-memory-access=allow",
+    )
+}
+
 tasks.jacocoTestReport {
     dependsOn(tasks.test)
     reports {
