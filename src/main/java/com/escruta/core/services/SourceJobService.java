@@ -17,7 +17,6 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -46,7 +45,6 @@ public class SourceJobService {
     private final RetrievalService retrievalService;
     private final ChatModel chatModel;
     private final SseNotificationService sseNotificationService;
-    @Qualifier("taskExecutor")
     private final Executor taskExecutor;
 
     private static final int SUMMARY_CHUNK_SIZE = 50000;
@@ -190,7 +188,7 @@ public class SourceJobService {
         return job.getStatus() == SourceJob.JobStatus.COMPLETED || job.getStatus() == SourceJob.JobStatus.FAILED;
     }
 
-    private UUID processExtract(SourceJob job) throws Exception {
+    private UUID processExtract(SourceJob job) {
         Source source = sourceRepository
                 .findById(job.getSource().getId())
                 .orElseThrow(() -> new IllegalStateException("Source no longer exists"));
@@ -235,7 +233,7 @@ public class SourceJobService {
         return sourceRepository.findNotebookOwnerId(source.getId());
     }
 
-    private UUID processSourceSummary(SourceJob job) throws Exception {
+    private UUID processSourceSummary(SourceJob job) {
         Source source = sourceRepository
                 .findById(job.getSource().getId())
                 .orElseThrow(() -> new IllegalStateException("Source no longer exists"));
