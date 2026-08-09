@@ -51,6 +51,13 @@ public class Notebook {
     @OneToMany(mappedBy = "notebook", cascade = CascadeType.REMOVE, orphanRemoval = true)
     private List<Conversation> conversations;
 
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
+    @Column(name = "last_activity_at", insertable = false, updatable = false)
+    private Timestamp lastActivityAt;
+
     @CreationTimestamp
     @Column(updatable = false)
     private Timestamp createdAt;

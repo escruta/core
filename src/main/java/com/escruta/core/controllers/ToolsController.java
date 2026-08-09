@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import jakarta.validation.Valid;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -41,7 +42,7 @@ public class ToolsController {
                     .accepted()
                     .body(new JobStartedResponse(
                             job.getId(),
-                            "Generation started. Poll /jobs/" + job.getId() + " for status."
+                            "Generation started. It will be published via SSE when ready."
                     ));
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
@@ -97,6 +98,6 @@ public class ToolsController {
         return generationService
                 .getLatestCompletedJob(notebookId, user.getId(), type)
                 .map(job -> ResponseEntity.ok(GenerationJobResponse.from(job)))
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseGet(() -> ResponseEntity.ok((GenerationJobResponse) null));
     }
 }

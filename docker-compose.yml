@@ -2,6 +2,7 @@ services:
   mariadb:
     image: mariadb:11.7
     container_name: escruta-db
+    command: [ "--innodb-snapshot-isolation=OFF" ]
     environment:
       MYSQL_ROOT_PASSWORD: ${ESCRUTA_DB_PASSWORD:-1234}
       MYSQL_DATABASE: escruta

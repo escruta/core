@@ -12,9 +12,11 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AccountStatusException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.stream.Collectors;
@@ -71,6 +73,20 @@ public class GlobalExceptionHandler {
                 "Invalid request",
                 "Something went wrong with your request. Please check your input and try again."
         );
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ProblemDetail handleOptimisticLock(ObjectOptimisticLockingFailureException ex) {
+        return createProblem(
+                HttpStatus.CONFLICT,
+                "Conflict",
+                "This item was modified by another session. Refresh and try again."
+        );
+    }
+
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleAsyncRequestNotUsable(AsyncRequestNotUsableException ex) {
+        logger.debug("Async request no longer usable (client disconnected): {}", ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

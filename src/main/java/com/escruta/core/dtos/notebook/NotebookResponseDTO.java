@@ -13,7 +13,8 @@ public record NotebookResponseDTO(
         String title,
         UUID folderId,
         Timestamp createdAt,
-        Timestamp updatedAt
+        Timestamp updatedAt,
+        Timestamp lastActivityAt
 ) {
     public NotebookResponseDTO(Notebook notebook) {
         this(
@@ -25,7 +26,8 @@ public record NotebookResponseDTO(
                         notebook.getFolder().getId() :
                         null,
                 notebook.getCreatedAt(),
-                notebook.getUpdatedAt()
+                notebook.getUpdatedAt(),
+                notebook.getLastActivityAt()
         );
     }
 }

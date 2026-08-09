@@ -74,15 +74,6 @@ public class GenerationJob {
         this.completedAt = Instant.now();
     }
 
-    @PrePersist
-    @PreUpdate
-    @PreRemove
-    private void touchNotebook() {
-        if (notebook != null) {
-            notebook.setUpdatedAt(new java.sql.Timestamp(System.currentTimeMillis()));
-        }
-    }
-
     public enum JobType {
         // AUDIO_SUMMARY,
         MIND_MAP,

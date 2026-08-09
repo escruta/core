@@ -30,14 +30,16 @@ CREATE TABLE folders
 
 CREATE TABLE notebooks
 (
-    created_at datetime(6),
-    updated_at datetime(6),
-    id         binary(16)   NOT NULL PRIMARY KEY,
-    user_id    binary(16)   NOT NULL,
-    folder_id  binary(16)   NULL,
-    icon       varchar(255),
-    summary    text,
-    title      varchar(255) NOT NULL,
+    created_at       datetime(6),
+    updated_at       datetime(6),
+    version          BIGINT       NOT NULL DEFAULT 0,
+    last_activity_at datetime(6)  NULL,
+    id               binary(16)   NOT NULL PRIMARY KEY,
+    user_id          binary(16)   NOT NULL,
+    folder_id        binary(16)   NULL,
+    icon             varchar(255),
+    summary          text,
+    title            varchar(255) NOT NULL,
     CONSTRAINT fk_notebooks_users FOREIGN KEY (user_id) REFERENCES users (id),
     CONSTRAINT fk_notebooks_folders FOREIGN KEY (folder_id) REFERENCES folders (id) ON DELETE SET NULL
 );

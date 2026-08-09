@@ -16,6 +16,7 @@ public record NotebookWithDetailsDTO(
         String title,
         Timestamp createdAt,
         Timestamp updatedAt,
+        Timestamp lastActivityAt,
         List<NoteResponseDTO> notes,
         List<SourceResponseDTO> sources
 ) {
@@ -27,6 +28,7 @@ public record NotebookWithDetailsDTO(
                 notebook.getTitle(),
                 notebook.getCreatedAt(),
                 notebook.getUpdatedAt(),
+                notebook.getLastActivityAt(),
                 notes,
                 sources
         );

@@ -71,6 +71,7 @@ public class SourceService {
         source.setTitle(newSourceDto.link());
         source.setStatus(SourceStatus.PENDING);
         source = sourceRepository.save(source);
+        notebookRepository.touchLastActivity(notebookId);
 
         sourceJobService.startExtractJob(source, null, null);
 
@@ -85,6 +86,7 @@ public class SourceService {
             Source source = sourceOptional.get();
             sourceMapper.updateSourceFromDto(newSource, source);
             sourceRepository.save(source);
+            notebookRepository.touchLastActivity(notebookId);
             return new SourceResponseDTO(source);
         }
         throw new SecurityException("User cannot update this source.");
@@ -99,6 +101,7 @@ public class SourceService {
             Source sourceToDelete = sourceOptional.get();
             try {
                 sourceRepository.deleteById(sourceId);
+                notebookRepository.touchLastActivity(notebookId);
                 eventPublisher.publishEvent(new SourceDeletedEvent(this, sourceId));
                 return new SourceResponseDTO(sourceToDelete);
             } catch (Exception e) {
@@ -127,6 +130,7 @@ public class SourceService {
         Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get(), "");
         source.setStatus(SourceStatus.PENDING);
         source = sourceRepository.save(source);
+        notebookRepository.touchLastActivity(notebookId);
 
         String fileName = file.getOriginalFilename();
         Path tempFile = writeUploadToTemp(file);
@@ -157,6 +161,7 @@ public class SourceService {
         Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get());
         source.setStatus(SourceStatus.PENDING);
         source = sourceRepository.save(source);
+        notebookRepository.touchLastActivity(notebookId);
 
         sourceJobService.startExtractJob(source, null, null);
 
@@ -177,6 +182,7 @@ public class SourceService {
 
         source.setSummary(null);
         sourceRepository.save(source);
+        notebookRepository.touchLastActivity(source.getNotebook().getId());
 
         SourceJob job = sourceJobService.startSourceSummaryJob(source);
         return new JobStartedResponse(
@@ -214,6 +220,7 @@ public class SourceService {
 
         source.setSummary(null);
         sourceRepository.save(source);
+        notebookRepository.touchLastActivity(source.getNotebook().getId());
         return true;
     }
 }

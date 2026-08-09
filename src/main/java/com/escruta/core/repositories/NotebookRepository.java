@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -32,4 +34,9 @@ public interface NotebookRepository extends JpaRepository<Notebook, UUID> {
     @Modifying
     @Query("UPDATE Notebook n SET n.summary = :summary WHERE n.id = :notebookId")
     void updateSummary(UUID notebookId, String summary);
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
+    @Modifying
+    @Query(value = "UPDATE notebooks SET last_activity_at = CURRENT_TIMESTAMP WHERE id = :notebookId", nativeQuery = true)
+    void touchLastActivity(UUID notebookId);
 }

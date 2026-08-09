@@ -162,6 +162,7 @@ public class SourceJobService {
                         sourceRepository.save(source);
                     });
                 }
+                notebookRepository.touchLastActivity(job.getNotebook().getId());
                 publishFailure(job);
             } catch (Exception recordError) {
                 log.warn("Could not record failure for source job {}: {}", jobId, recordError.getMessage());
@@ -229,6 +230,7 @@ public class SourceJobService {
         source.setContent(content);
         source.setStatus(SourceStatus.READY);
         sourceRepository.save(source);
+        notebookRepository.touchLastActivity(notebookId);
 
         return sourceRepository.findNotebookOwnerId(source.getId());
     }
@@ -242,6 +244,7 @@ public class SourceJobService {
 
         source.setSummary(summary);
         sourceRepository.save(source);
+        notebookRepository.touchLastActivity(source.getNotebook().getId());
         job.setResult(summary);
 
         return sourceRepository.findNotebookOwnerId(source.getId());

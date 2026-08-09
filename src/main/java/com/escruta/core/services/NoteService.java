@@ -54,6 +54,7 @@ public class NoteService {
 
         Note note = noteMapper.toNote(newNoteDto, notebookOptional.get());
         noteRepository.save(note);
+        notebookRepository.touchLastActivity(newNoteDto.notebookId());
         return new NoteResponseDTO(note);
     }
 
@@ -61,8 +62,10 @@ public class NoteService {
         Optional<Note> noteOptional = noteRepository.findById(UUID.fromString(newNoteDto.id()));
         if (noteOptional.isPresent()) {
             Note note = noteOptional.get();
+            UUID notebookId = note.getNotebook().getId();
             noteMapper.updateNoteFromDto(newNoteDto, note);
             noteRepository.save(note);
+            notebookRepository.touchLastActivity(notebookId);
             return new NoteResponseDTO(note);
         }
         return null;
@@ -71,8 +74,11 @@ public class NoteService {
     public NoteResponseDTO deleteNote(UUID noteId) {
         Optional<Note> noteOptional = noteRepository.findById(noteId);
         if (noteOptional.isPresent()) {
+            Note note = noteOptional.get();
+            UUID notebookId = note.getNotebook().getId();
             noteRepository.deleteById(noteId);
-            return new NoteResponseDTO(noteOptional.get());
+            notebookRepository.touchLastActivity(notebookId);
+            return new NoteResponseDTO(note);
         }
         return null;
     }

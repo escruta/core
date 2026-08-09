@@ -250,6 +250,7 @@ public class ChatController {
             conversation.setTitle(title.trim());
         }
         conversationRepository.save(conversation);
+        notebookRepository.touchLastActivity(conversation.getNotebook().getId());
 
         List<Document> documents = chatResponse
                 .getMetadata()
@@ -393,6 +394,7 @@ public class ChatController {
             }
             assert conversation != null;
             conversationRepository.save(conversation);
+            notebookRepository.touchLastActivity(notebook.getId());
 
             List<ChatReplyMessage.CitedSource> citedSources = retrievedDocuments
                     .stream()

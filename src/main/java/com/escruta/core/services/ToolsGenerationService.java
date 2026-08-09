@@ -20,7 +20,9 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -31,6 +33,7 @@ public class ToolsGenerationService {
     private final NotebookRepository notebookRepository;
     private final RetrievalService retrievalService;
     private final SourceService sourceService;
+    private final SseNotificationService sseNotificationService;
     private final ChatModel chatModel;
     private final ObjectMapper objectMapper;
 
@@ -52,7 +55,9 @@ public class ToolsGenerationService {
         }
 
         GenerationJob job = new GenerationJob(notebook, user, type);
-        return jobRepository.save(job);
+        GenerationJob savedJob = jobRepository.save(job);
+        notebookRepository.touchLastActivity(notebookId);
+        return savedJob;
     }
 
     public Optional<GenerationJob> getJob(UUID jobId, UUID userId) {
@@ -84,6 +89,8 @@ public class ToolsGenerationService {
             return;
         }
 
+        UUID userId = job.getUser().getId();
+
         try {
             job.markAsProcessing();
             jobRepository.save(job);
@@ -96,6 +103,49 @@ public class ToolsGenerationService {
             job.markAsFailed(e.getMessage());
             jobRepository.save(job);
         }
+
+        notebookRepository.touchLastActivity(job.getNotebook().getId());
+        publishEvent(job, userId);
+    }
+
+    private void publishEvent(GenerationJob job, UUID userId) {
+        if (userId == null) {
+            return;
+        }
+        sseNotificationService.publish(userId, "tool.updated", toolEventPayload(job));
+    }
+
+    private Map<String, Object> toolEventPayload(GenerationJob job) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("notebookId", job.getNotebook().getId().toString());
+        payload.put("jobId", job.getId().toString());
+        payload.put("type", job.getType().toString());
+        payload.put("status", job.getStatus().toString());
+        payload.put(
+                "result",
+                job.getResult() != null ?
+                        job.getResult() :
+                        ""
+        );
+        payload.put(
+                "errorMessage",
+                job.getErrorMessage() != null ?
+                        job.getErrorMessage() :
+                        ""
+        );
+        payload.put(
+                "createdAt",
+                job.getCreatedAt() != null ?
+                        job.getCreatedAt().toString() :
+                        null
+        );
+        payload.put(
+                "completedAt",
+                job.getCompletedAt() != null ?
+                        job.getCompletedAt().toString() :
+                        null
+        );
+        return payload;
     }
 
     private String generateContent(GenerationJob job) throws Exception {
