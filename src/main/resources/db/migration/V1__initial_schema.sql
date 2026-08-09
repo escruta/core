@@ -38,7 +38,7 @@ CREATE TABLE notebooks
     icon       varchar(255),
     summary    text,
     title      varchar(255) NOT NULL,
-    CONSTRAINT fkk5jweiuqjycrab2dgljlc919i FOREIGN KEY (user_id) REFERENCES users (id),
+    CONSTRAINT fk_notebooks_users FOREIGN KEY (user_id) REFERENCES users (id),
     CONSTRAINT fk_notebooks_folders FOREIGN KEY (folder_id) REFERENCES folders (id) ON DELETE SET NULL
 );
 
@@ -56,8 +56,8 @@ CREATE TABLE generation_jobs
     type          varchar(255) NOT NULL,
     CONSTRAINT generation_jobs_status_check CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
     CONSTRAINT generation_jobs_type_check CHECK (type IN ('MIND_MAP', 'STUDY_GUIDE', 'FLASHCARDS', 'QUESTIONNAIRE')),
-    CONSTRAINT fkk52imtum2mlr8jincdyof51b4 FOREIGN KEY (user_id) REFERENCES users (id),
-    CONSTRAINT fknbxv6clr25q42x7racegnuli0 FOREIGN KEY (notebook_id) REFERENCES notebooks (id)
+    CONSTRAINT fk_generation_jobs_users FOREIGN KEY (user_id) REFERENCES users (id),
+    CONSTRAINT fk_generation_jobs_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id)
 );
 
 CREATE TABLE sources
@@ -76,7 +76,7 @@ CREATE TABLE sources
     type               varchar(255),
     CONSTRAINT sources_status_check CHECK (status IN ('PENDING', 'READY', 'FAILED')),
     CONSTRAINT sources_type_check CHECK (type IN ('WEBSITE', 'YOUTUBE_VIDEO', 'FILE', 'TEXT')),
-    CONSTRAINT fk4w6o7fe9755mx90a81awu2klm FOREIGN KEY (notebook_id) REFERENCES notebooks (id)
+    CONSTRAINT fk_sources_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id)
 );
 
 CREATE TABLE notes
@@ -87,7 +87,7 @@ CREATE TABLE notes
     notebook_id binary(16)   NOT NULL,
     content     longtext,
     title       varchar(255) NOT NULL,
-    CONSTRAINT fk814tu72hqd3m67ramoipdr0qq FOREIGN KEY (notebook_id) REFERENCES notebooks (id)
+    CONSTRAINT fk_notes_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id)
 );
 
 CREATE TABLE messages
@@ -133,4 +133,4 @@ CREATE INDEX source_jobs_notebook_idx
     ON source_jobs (notebook_id, type, status);
 
 ALTER TABLE conversations
-    ADD CONSTRAINT fka2jxphva2eexgctoqxgpl4krc FOREIGN KEY (notebook_id) REFERENCES notebooks (id);
+    ADD CONSTRAINT fk_conversations_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id);
