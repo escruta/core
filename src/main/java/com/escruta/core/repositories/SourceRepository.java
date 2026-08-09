@@ -15,6 +15,9 @@ public interface SourceRepository extends CrudRepository<Source, UUID> {
 
     boolean existsByNotebookId(UUID notebookId);
 
+    @Query("select s.link from Source s where s.notebook.id = :notebookId and s.link is not null")
+    List<String> findLinksByNotebookId(UUID notebookId);
+
     @Query("select s.notebook.id from Source s where s.id = :sourceId")
     UUID findNotebookId(UUID sourceId);
 

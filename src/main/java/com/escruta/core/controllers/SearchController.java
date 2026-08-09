@@ -5,6 +5,7 @@ import com.escruta.core.dtos.SearchResponse;
 import com.escruta.core.services.HelperService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -14,7 +15,8 @@ public class SearchController {
     private final HelperService helperService;
 
     @PostMapping
+    @PreAuthorize("@notebookOwnershipService.isUserNotebookOwner(#request.notebookId())")
     public SearchResponse search(@Valid @RequestBody SearchRequest request) {
-        return helperService.search(request.query(), request.maxResults());
+        return helperService.search(request.query(), request.maxResults(), request.notebookId());
     }
 }

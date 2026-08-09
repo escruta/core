@@ -2,6 +2,8 @@ package com.escruta.core.services;
 
 import com.escruta.core.dtos.ExtractorResponse;
 import com.escruta.core.dtos.SearchResponse;
+import com.escruta.core.dtos.SearchResult;
+import com.escruta.core.repositories.SourceRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -17,12 +19,17 @@ import org.springframework.web.client.RestClient;
 
 import java.io.File;
 import java.net.http.HttpClient;
+import java.util.List;
+import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class HelperService {
     private final RestClient.Builder restClientBuilder;
+    private final SourceRepository sourceRepository;
     private RestClient restClient;
 
     @Value("${services.helper.base-url}")
@@ -40,11 +47,34 @@ public class HelperService {
                 .build();
     }
 
-    public SearchResponse search(String query, int maxResults) {
+    public SearchResponse search(String query, int maxResults, UUID notebookId) {
         var body = new LinkedMultiValueMap<String, Object>();
         body.add("query", query);
         body.add("max_results", String.valueOf(maxResults));
-        return postForm(body, "/search", SearchResponse.class);
+        SearchResponse response = postForm(body, "/search", SearchResponse.class);
+
+        Set<String> existingLinks = sourceRepository
+                .findLinksByNotebookId(notebookId)
+                .stream()
+                .map(HelperService::normalizeUrl)
+                .collect(Collectors.toSet());
+
+        if (existingLinks.isEmpty()) {
+            return response;
+        }
+
+        List<SearchResult> filtered = response
+                .results()
+                .stream()
+                .filter(result -> !existingLinks.contains(normalizeUrl(result.link())))
+                .toList();
+        return new SearchResponse(filtered);
+    }
+
+    private static String normalizeUrl(String url) {
+        if (url == null)
+            return "";
+        return url.trim().replaceFirst("^(https?://)?(www\\.)?", "").replaceAll("/+$", "").toLowerCase(Locale.ROOT);
     }
 
     public ExtractorResponse extractMarkdown(File file, String filename) {
