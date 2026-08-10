@@ -9,6 +9,7 @@ import com.escruta.core.entities.enums.SourceStatus;
 import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.repositories.SourceJobRepository;
 import com.escruta.core.repositories.SourceRepository;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -20,9 +21,11 @@ import org.springframework.ai.document.Document;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -46,6 +49,13 @@ public class SourceJobService {
     private final ChatModel chatModel;
     private final SseNotificationService sseNotificationService;
     private final Executor taskExecutor;
+    private final PlatformTransactionManager transactionManager;
+    private TransactionTemplate transactionTemplate;
+
+    @PostConstruct
+    public void initTransactionTemplate() {
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
 
     private static final int SUMMARY_CHUNK_SIZE = 50000;
 
@@ -153,16 +163,13 @@ public class SourceJobService {
         } catch (Exception e) {
             log.error("Source job {} ({}) failed: {}", jobId, job.getType(), e.getMessage(), e);
             try {
-                job.markAsFailed(e.getMessage());
-                jobRepository.save(job);
-
                 if (job.getType() == SourceJob.JobType.EXTRACT) {
-                    sourceRepository.findById(job.getSource().getId()).ifPresent(source -> {
-                        source.setStatus(SourceStatus.FAILED);
-                        sourceRepository.save(source);
-                    });
+                    recordExtractFailure(job, e.getMessage());
+                } else {
+                    job.markAsFailed(e.getMessage());
+                    jobRepository.save(job);
+                    notebookRepository.touchLastActivity(job.getNotebook().getId());
                 }
-                notebookRepository.touchLastActivity(job.getNotebook().getId());
                 publishFailure(job);
             } catch (Exception recordError) {
                 log.warn("Could not record failure for source job {}: {}", jobId, recordError.getMessage());
@@ -170,6 +177,19 @@ public class SourceJobService {
         } finally {
             deleteTempFile(job);
         }
+    }
+
+    private void recordExtractFailure(SourceJob job, String errorMessage) {
+        transactionTemplate.executeWithoutResult(status -> {
+            job.markAsFailed(errorMessage);
+            jobRepository.save(job);
+
+            sourceRepository.findById(job.getSource().getId()).ifPresent(source -> {
+                source.setStatus(SourceStatus.FAILED);
+                sourceRepository.save(source);
+            });
+        });
+        notebookRepository.touchLastActivity(job.getNotebook().getId());
     }
 
     @EventListener(ApplicationReadyEvent.class)

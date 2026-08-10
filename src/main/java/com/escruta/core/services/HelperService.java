@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -18,7 +19,9 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.http.HttpClient;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -105,15 +108,25 @@ public class HelperService {
                 .retrieve()
                 .onStatus(
                         HttpStatusCode::is4xxClientError, (_, response) -> {
-                            throw new RuntimeException("Unauthorized: " + response.getStatusCode());
+                            throw new RuntimeException("Helper request rejected: " + response.getStatusCode() + " " + readErrorBody(
+                                    response));
                         }
                 )
                 .onStatus(
                         HttpStatusCode::is5xxServerError, (_, response) -> {
-                            throw new RuntimeException("Server Error: " + response.getStatusCode());
+                            throw new RuntimeException("Helper request failed: " + response.getStatusCode() + " " + readErrorBody(
+                                    response));
                         }
                 )
                 .body(responseType);
+    }
+
+    private static String readErrorBody(ClientHttpResponse response) {
+        try {
+            return new String(response.getBody().readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            return "";
+        }
     }
 
     private static final Set<String> SUPPORTED_TYPES = Set.of(
