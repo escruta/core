@@ -2,12 +2,15 @@ package com.escruta.core.configs;
 
 import com.escruta.core.repositories.UserRepository;
 import com.escruta.core.services.TokenService;
+import jakarta.servlet.http.Cookie;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.config.Customizer;
@@ -22,6 +25,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.core.DefaultOAuth2AuthenticatedPrincipal;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.introspection.OpaqueTokenIntrospector;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
@@ -30,6 +34,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 
 @Configuration
@@ -49,6 +55,13 @@ public class SecurityConfiguration {
     @Value("${security.cors.allowCredentials}")
     private boolean allowCredentials;
 
+    @Value("${security.cookie.name:escruta_token}")
+    private String cookieName;
+    @Value("${security.cookie.domain:}")
+    private String cookieDomain;
+    @Value("${security.cookie.secure:true}")
+    private boolean cookieSecure;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) {
         http
@@ -56,29 +69,67 @@ public class SecurityConfiguration {
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests((authorize) -> authorize
-                        .requestMatchers(HttpMethod.POST, "/login", "/register", "/introspect")
+                        .requestMatchers(HttpMethod.POST, "/login", "/register", "/introspect", "/device/start")
                         .permitAll()
-                        .requestMatchers(HttpMethod.GET, "/")
+                        .requestMatchers(HttpMethod.GET, "/", "/device/token")
                         .permitAll()
                         .anyRequest()
                         .authenticated())
-                .oauth2ResourceServer(oauth2 -> oauth2.opaqueToken(opaque -> opaque.introspector(opaqueTokenIntrospector())))
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .bearerTokenResolver(bearerTokenResolver())
+                        .opaqueToken(opaque -> opaque.introspector(opaqueTokenIntrospector())))
                 .logout(logout -> logout
                         .logoutUrl("/logout")
                         .addLogoutHandler(logoutHandler())
+                        .addLogoutHandler(clearCookieLogoutHandler())
                         .logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler(HttpStatus.OK)));
 
         return http.build();
     }
 
     @Bean
+    public BearerTokenResolver bearerTokenResolver() {
+        return request -> {
+            String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+            if (header != null && header.toLowerCase().startsWith("bearer ")) {
+                return header.substring(7).trim();
+            }
+            if (request.getCookies() != null) {
+                for (Cookie cookie : request.getCookies()) {
+                    if (cookieName.equals(cookie.getName())) {
+                        return cookie.getValue();
+                    }
+                }
+            }
+            return null;
+        };
+    }
+
+    @Bean
     public LogoutHandler logoutHandler() {
         return (request, _, _) -> {
-            String authHeader = request.getHeader("Authorization");
-            if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                String token = authHeader.substring(7);
+            String token = bearerTokenResolver().resolve(request);
+            if (token != null) {
                 tokenService.invalidateToken(token);
             }
+        };
+    }
+
+    @Bean
+    public LogoutHandler clearCookieLogoutHandler() {
+        return (_, response, _) -> {
+            ResponseCookie cookie = ResponseCookie
+                    .from(cookieName, "")
+                    .httpOnly(true)
+                    .secure(cookieSecure)
+                    .sameSite("Lax")
+                    .path("/")
+                    .maxAge(0)
+                    .domain(cookieDomain.isBlank() ?
+                            null :
+                            cookieDomain)
+                    .build();
+            response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
         };
     }
 
@@ -136,5 +187,19 @@ public class SecurityConfiguration {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
+    }
+
+    public ResponseCookie buildAuthCookie(String rawToken, Instant expiresAt) {
+        return ResponseCookie
+                .from(cookieName, rawToken)
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .sameSite("Lax")
+                .path("/")
+                .maxAge(Duration.between(Instant.now(), expiresAt))
+                .domain(cookieDomain.isBlank() ?
+                        null :
+                        cookieDomain)
+                .build();
     }
 }

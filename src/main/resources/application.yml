@@ -62,6 +62,10 @@ logging:
 security:
   session:
     expiration-interval-seconds: ${ESCRUTA_SESSION_EXPIRATION_SECONDS:3600}
+  cookie:
+    name: ${ESCRUTA_COOKIE_NAME:escruta_token}
+    domain: ${ESCRUTA_COOKIE_DOMAIN:}
+    secure: ${ESCRUTA_COOKIE_SECURE:true}
   cors:
     allowedOrigins: ${ESCRUTA_CORS_ALLOWED_ORIGINS:*}
     allowedMethods: GET,POST,PUT,PATCH,DELETE,OPTIONS
