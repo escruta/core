@@ -3,14 +3,14 @@
 This is the core engine of the Escruta research assistant platform. Built with Java and Spring Boot, it handles the
 business logic, document processing, AI orchestration, and persistent storage for your research data.
 
-Built with Java 25, Spring Boot 4.1, Spring AI, MariaDB, Qdrant, and Lombok.
+Built with Java 25, Spring Boot 4.1, Spring AI, MariaDB, and Lombok.
 
 ## Getting Started
 
 ### Prerequisites
 
 - Java Development Kit (JDK) 25.
-- Docker (for MariaDB, Qdrant, and Redis).
+- Docker (for MariaDB and Redis).
 - An OpenAI-compatible API.
 - Escruta Helper service running (see [Escruta Helper](https://github.com/escruta/helper)).
 
@@ -42,14 +42,6 @@ application at runtime.
 | `ESCRUTA_AI_BASE_URL`                | Base URL for the AI provider                             | (Required)                              |
 | `ESCRUTA_AI_API_KEY`                 | API Key for the AI provider                              | (Required)                              |
 | `ESCRUTA_AI_MODEL`                   | AI model to use for chat                                 | (Required)                              |
-| `ESCRUTA_AI_EMBEDDING_MODEL`         | AI model to use for embeddings                           | (Required)                              |
-| `ESCRUTA_AI_EMBEDDING_DIMENSIONS`    | Dimensions of the embedding vectors                      | `768`                                   |
-| `ESCRUTA_AI_EMBEDDING_BASE_URL`      | Base URL for embeddings (if differs)                     | `ESCRUTA_AI_BASE_URL`                   |
-| `ESCRUTA_AI_EMBEDDING_API_KEY`       | API Key for embeddings (if differs)                      | `ESCRUTA_AI_API_KEY`                    |
-| `ESCRUTA_VDB_HOST`                   | Qdrant database host                                     | `localhost`                             |
-| `ESCRUTA_VDB_PORT`                   | Qdrant database port                                     | `6334`                                  |
-| `ESCRUTA_VDB_API_KEY`                | API Key for Qdrant (if required)                         |                                         |
-| `ESCRUTA_VDB_COLLECTION`             | Qdrant collection name                                   | `escruta`                               |
 | `ESCRUTA_CORS_ALLOWED_ORIGINS`       | Allowed origins for CORS                                 | `http://localhost:5173`                 |
 | `ESCRUTA_SESSION_EXPIRATION_SECONDS` | Session expiration interval (seconds)                    | `3600`                                  |
 | `ESCRUTA_COOKIE_NAME`                | Name of the auth session cookie                          | `escruta_token`                         |

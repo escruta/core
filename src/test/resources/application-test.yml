@@ -1,9 +1,7 @@
 spring:
   autoconfigure:
     exclude:
-      - org.springframework.ai.vectorstore.qdrant.autoconfigure.QdrantVectorStoreAutoConfiguration
       - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
-      - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
   main:
     allow-bean-definition-overriding: true
   data:
@@ -26,17 +24,6 @@ spring:
       api-key: "dummy-api-key"
       chat:
         model: "dummy-model"
-      embedding:
-        model: "dummy-embedding-model"
-        dimensions: 768
-        base-url: "http://localhost:8080"
-        api-key: "dummy-api-key"
-    vectorstore:
-      qdrant:
-        host: ${ESCRUTA_VDB_HOST:localhost}
-        port: ${ESCRUTA_VDB_PORT:6334}
-        collection-name: escruta_test
-        initialize-schema: false
 
 security:
   session:

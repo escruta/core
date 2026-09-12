@@ -11,8 +11,6 @@ import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.repositories.FolderRepository;
 import com.escruta.core.repositories.SourceRepository;
 import lombok.RequiredArgsConstructor;
-import com.escruta.core.events.NotebookDeletedEvent;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -31,7 +29,6 @@ public class NotebookService {
     private final FolderRepository folderRepository;
     private final NotebookMapper notebookMapper;
     private final NoteService noteService;
-    private final ApplicationEventPublisher eventPublisher;
 
     public List<NotebookResponseDTO> getAllUserNotebooks() {
         return notebookRepository.findByUserId(userService.getUserId()).stream().map(NotebookResponseDTO::new).toList();
@@ -127,7 +124,6 @@ public class NotebookService {
             if (notebookOptional.isPresent()) {
                 Notebook notebook = notebookOptional.get();
                 notebookRepository.deleteById(notebook.getId());
-                eventPublisher.publishEvent(new NotebookDeletedEvent(this, notebook.getId()));
                 return new NotebookResponseDTO(notebook);
             }
             return null;

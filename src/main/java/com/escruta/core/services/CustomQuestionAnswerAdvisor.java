@@ -3,6 +3,7 @@ package com.escruta.core.services;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.lang.NonNull;
@@ -17,17 +18,11 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.SearchRequest;
-import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.ai.vectorstore.filter.Filter;
-import org.springframework.ai.vectorstore.filter.FilterExpressionTextParser;
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
-import org.springframework.util.StringUtils;
 
 public class CustomQuestionAnswerAdvisor implements BaseAdvisor {
     public static final String RETRIEVED_DOCUMENTS = "qa_retrieved_documents";
-    public static final String FILTER_EXPRESSION = "qa_filter_expression";
     private static final PromptTemplate DEFAULT_PROMPT_TEMPLATE = new PromptTemplate("""
             {query}
             
@@ -43,24 +38,31 @@ public class CustomQuestionAnswerAdvisor implements BaseAdvisor {
             """);
 
     private static final int DEFAULT_ORDER = 0;
-    private final VectorStore vectorStore;
+    private static final int DEFAULT_TOP_K = 5;
+    private final RetrievalService retrievalService;
+    private final UUID notebookId;
+    private final List<UUID> selectedSourceIds;
+    private final int topK;
     private final PromptTemplate promptTemplate;
-    private final SearchRequest searchRequest;
     private final Scheduler scheduler;
     private final int order;
 
     CustomQuestionAnswerAdvisor(
-            VectorStore vectorStore,
-            SearchRequest searchRequest,
+            RetrievalService retrievalService,
+            UUID notebookId,
+            @Nullable List<UUID> selectedSourceIds,
+            int topK,
             @Nullable PromptTemplate promptTemplate,
             @Nullable Scheduler scheduler,
             int order
     ) {
-        Assert.notNull(vectorStore, "vectorStore cannot be null");
-        Assert.notNull(searchRequest, "searchRequest cannot be null");
+        Assert.notNull(retrievalService, "retrievalService cannot be null");
+        Assert.notNull(notebookId, "notebookId cannot be null");
 
-        this.vectorStore = vectorStore;
-        this.searchRequest = searchRequest;
+        this.retrievalService = retrievalService;
+        this.notebookId = notebookId;
+        this.selectedSourceIds = selectedSourceIds;
+        this.topK = topK;
         this.promptTemplate = promptTemplate != null ?
                 promptTemplate :
                 DEFAULT_PROMPT_TEMPLATE;
@@ -70,8 +72,8 @@ public class CustomQuestionAnswerAdvisor implements BaseAdvisor {
         this.order = order;
     }
 
-    public static Builder builder(VectorStore vectorStore) {
-        return new Builder(vectorStore);
+    public static Builder builder(RetrievalService retrievalService, UUID notebookId) {
+        return new Builder(retrievalService, notebookId);
     }
 
     @Override
@@ -81,13 +83,14 @@ public class CustomQuestionAnswerAdvisor implements BaseAdvisor {
 
     @Override
     public ChatClientRequest before(ChatClientRequest chatClientRequest, @NonNull AdvisorChain advisorChain) {
-        var searchRequestToUse = SearchRequest
-                .from(this.searchRequest)
-                .query(chatClientRequest.prompt().getUserMessage().getText())
-                .filterExpression(doGetFilterExpression(chatClientRequest.context()))
-                .build();
+        String query = chatClientRequest.prompt().getUserMessage().getText();
 
-        List<Document> documents = this.vectorStore.similaritySearch(searchRequestToUse);
+        List<Document> documents = this.retrievalService.search(
+                this.notebookId,
+                this.selectedSourceIds,
+                query,
+                this.topK
+        );
 
         Map<String, Object> context = new HashMap<>(chatClientRequest.context());
         context.put(RETRIEVED_DOCUMENTS, documents);
@@ -128,42 +131,40 @@ public class CustomQuestionAnswerAdvisor implements BaseAdvisor {
                 .build();
     }
 
-    @Nullable
-    protected Filter.Expression doGetFilterExpression(Map<String, Object> context) {
-        if (!context.containsKey(FILTER_EXPRESSION) || !StringUtils.hasText(context
-                .get(FILTER_EXPRESSION)
-                .toString())) {
-            return this.searchRequest.getFilterExpression();
-        }
-        return new FilterExpressionTextParser().parse(context.get(FILTER_EXPRESSION).toString());
-    }
-
     @Override
     public Scheduler getScheduler() {
         return this.scheduler;
     }
 
     public static final class Builder {
-        private final VectorStore vectorStore;
-        private SearchRequest searchRequest = SearchRequest.builder().build();
+        private final RetrievalService retrievalService;
+        private final UUID notebookId;
+        private List<UUID> selectedSourceIds;
+        private int topK = DEFAULT_TOP_K;
         private PromptTemplate promptTemplate;
         private Scheduler scheduler;
         private int order = DEFAULT_ORDER;
 
-        private Builder(VectorStore vectorStore) {
-            Assert.notNull(vectorStore, "The vectorStore must not be null!");
-            this.vectorStore = vectorStore;
+        private Builder(RetrievalService retrievalService, UUID notebookId) {
+            Assert.notNull(retrievalService, "The retrievalService must not be null!");
+            Assert.notNull(notebookId, "The notebookId must not be null!");
+            this.retrievalService = retrievalService;
+            this.notebookId = notebookId;
+        }
+
+        public Builder selectedSourceIds(List<UUID> selectedSourceIds) {
+            this.selectedSourceIds = selectedSourceIds;
+            return this;
+        }
+
+        public Builder topK(int topK) {
+            this.topK = topK;
+            return this;
         }
 
         public Builder promptTemplate(PromptTemplate promptTemplate) {
             Assert.notNull(promptTemplate, "promptTemplate cannot be null");
             this.promptTemplate = promptTemplate;
-            return this;
-        }
-
-        public Builder searchRequest(SearchRequest searchRequest) {
-            Assert.notNull(searchRequest, "The searchRequest must not be null!");
-            this.searchRequest = searchRequest;
             return this;
         }
 
@@ -181,8 +182,10 @@ public class CustomQuestionAnswerAdvisor implements BaseAdvisor {
 
         public CustomQuestionAnswerAdvisor build() {
             return new CustomQuestionAnswerAdvisor(
-                    this.vectorStore,
-                    this.searchRequest,
+                    this.retrievalService,
+                    this.notebookId,
+                    this.selectedSourceIds,
+                    this.topK,
                     this.promptTemplate,
                     this.scheduler,
                     this.order

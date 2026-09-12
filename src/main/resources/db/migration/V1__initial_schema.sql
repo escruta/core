@@ -136,3 +136,23 @@ CREATE INDEX source_jobs_notebook_idx
 
 ALTER TABLE conversations
     ADD CONSTRAINT fk_conversations_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id);
+
+CREATE TABLE source_chunks
+(
+    id          binary(16)   NOT NULL PRIMARY KEY,
+    source_id   binary(16)   NOT NULL,
+    notebook_id binary(16)   NOT NULL,
+    chunk_index int          NOT NULL,
+    title       varchar(255) NOT NULL,
+    link        varchar(255),
+    content     text         NOT NULL,
+    CONSTRAINT fk_source_chunks_sources FOREIGN KEY (source_id) REFERENCES sources (id) ON DELETE CASCADE,
+    CONSTRAINT fk_source_chunks_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id) ON DELETE CASCADE,
+    FULLTEXT KEY ft_source_chunks_content (content)
+);
+
+CREATE INDEX source_chunks_source_idx
+    ON source_chunks (source_id, chunk_index);
+
+CREATE INDEX source_chunks_notebook_idx
+    ON source_chunks (notebook_id);

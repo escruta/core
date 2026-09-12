@@ -12,7 +12,6 @@ import com.escruta.core.mappers.NotebookMapper;
 import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.repositories.SourceRepository;
 import org.junit.jupiter.api.DisplayName;
-import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -38,9 +37,6 @@ class NotebookServiceTest {
 
     @Mock
     private SourceRepository sourceRepository;
-
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
 
     @Mock
     private NotebookMapper notebookMapper;
@@ -205,7 +201,6 @@ class NotebookServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.title()).isEqualTo("Notebook to Delete");
         verify(notebookRepository).deleteById(NOTEBOOK_ID);
-        verify(eventPublisher).publishEvent(any(com.escruta.core.events.NotebookDeletedEvent.class));
     }
 
     @Test

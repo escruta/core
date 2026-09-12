@@ -16,8 +16,6 @@ import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.repositories.SourceRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationEventPublisher;
-import com.escruta.core.events.SourceDeletedEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -38,7 +36,6 @@ public class SourceService {
     private final SourceMapper sourceMapper;
     private final HelperService helperService;
     private final SourceJobService sourceJobService;
-    private final ApplicationEventPublisher eventPublisher;
 
     @Value("${services.source-uploads.dir}")
     private String uploadDir;
@@ -102,7 +99,6 @@ public class SourceService {
             try {
                 sourceRepository.deleteById(sourceId);
                 notebookRepository.touchLastActivity(notebookId);
-                eventPublisher.publishEvent(new SourceDeletedEvent(this, sourceId));
                 return new SourceResponseDTO(sourceToDelete);
             } catch (Exception e) {
                 throw new RuntimeException("Error while deleting the source: " + e.getMessage(), e);

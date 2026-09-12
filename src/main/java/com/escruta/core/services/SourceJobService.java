@@ -44,7 +44,7 @@ public class SourceJobService {
     private final SourceRepository sourceRepository;
     private final NotebookRepository notebookRepository;
     private final HelperService helperService;
-    private final AsyncVectorIndexingService asyncVectorIndexingService;
+    private final AsyncChunkIndexingService asyncChunkIndexingService;
     private final RetrievalService retrievalService;
     private final ChatModel chatModel;
     private final SseNotificationService sseNotificationService;
@@ -234,7 +234,7 @@ public class SourceJobService {
             content = source.getContent();
         }
 
-        asyncVectorIndexingService.indexSourceInVectorStore(
+        asyncChunkIndexingService.indexSource(
                 notebookId,
                 source.getId(),
                 title != null ?
@@ -270,17 +270,13 @@ public class SourceJobService {
         return sourceRepository.findNotebookOwnerId(source.getId());
     }
 
-    private UUID processNotebookSummary(SourceJob job) throws Exception {
+    private UUID processNotebookSummary(SourceJob job) {
         UUID notebookId = job.getNotebook().getId();
         if (sourceRepository.existsByNotebookId(notebookId)) {
             String query = "core concepts key ideas summary main topic definitions overview";
             List<Document> documents = retrievalService.getDocumentsForNotebook(notebookId, query, 20);
             if (documents.isEmpty()) {
-                Thread.sleep(1000);
-                documents = retrievalService.getDocumentsForNotebook(notebookId, query, 20);
-                if (documents.isEmpty()) {
-                    throw new IllegalStateException("No sources available or content not yet indexed");
-                }
+                throw new IllegalStateException("No sources available or content not yet indexed");
             }
 
             String context = documents

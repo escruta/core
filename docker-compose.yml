@@ -23,21 +23,9 @@ services:
     networks:
       - escruta-net
 
-  qdrant:
-    image: qdrant/qdrant:latest
-    container_name: escruta-vdb
-    ports:
-      - "127.0.0.1:6333:6333"
-      - "127.0.0.1:6334:6334"
-    volumes:
-      - qdrant_data:/qdrant/storage
-    networks:
-      - escruta-net
-
 volumes:
   mariadb_data:
   redis_data:
-  qdrant_data:
 
 networks:
   escruta-net:

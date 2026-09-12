@@ -61,6 +61,7 @@ class NotebookControllerTest {
                 "Notebook 1",
                 null,
                 null,
+                null,
                 null
         );
         NotebookResponseDTO notebook2 = new NotebookResponseDTO(
@@ -68,6 +69,7 @@ class NotebookControllerTest {
                 null,
                 "📓",
                 "Notebook 2",
+                null,
                 null,
                 null,
                 null
@@ -92,6 +94,7 @@ class NotebookControllerTest {
                 null,
                 "📓",
                 "New Notebook",
+                null,
                 null,
                 null,
                 null
@@ -131,6 +134,7 @@ class NotebookControllerTest {
                 null,
                 "📒",
                 "Updated Title",
+                null,
                 null,
                 null,
                 null
@@ -191,6 +195,7 @@ class NotebookControllerTest {
                 null,
                 null,
                 "Deleted Notebook",
+                null,
                 null,
                 null,
                 null

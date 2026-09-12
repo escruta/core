@@ -1,97 +1,57 @@
 package com.escruta.core.services;
 
+import com.escruta.core.entities.SourceChunk;
+import com.escruta.core.repositories.SourceChunkRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.retry.annotation.Retryable;
-import org.springframework.retry.annotation.Backoff;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.SearchRequest;
-import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.ai.vectorstore.filter.Filter;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class RetrievalService {
-    @Autowired(required = false)
-    private VectorStore vectorStore;
+    private static final int FALLBACK_SCAN_SIZE = 200;
+
+    private final SourceChunkRepository chunkRepository;
 
     public CustomQuestionAnswerAdvisor getQuestionAnswerAdvisor(UUID notebookId, List<UUID> selectedSourceIds) {
-        if (vectorStore == null) {
-            return null;
-        }
-        Filter.Expression notebookFilter = new Filter.Expression(
-                Filter.ExpressionType.EQ,
-                new Filter.Key("notebookId"),
-                new Filter.Value(notebookId.toString())
-        );
-
-        Filter.Expression finalFilter = notebookFilter;
-
-        if (selectedSourceIds != null && !selectedSourceIds.isEmpty()) {
-            List<String> sourceIdStrings = selectedSourceIds.stream().map(UUID::toString).toList();
-
-            Filter.Expression sourceFilter = new Filter.Expression(
-                    Filter.ExpressionType.IN,
-                    new Filter.Key("sourceId"),
-                    new Filter.Value(sourceIdStrings)
-            );
-
-            finalFilter = new Filter.Expression(Filter.ExpressionType.AND, notebookFilter, sourceFilter);
-        }
-
         return CustomQuestionAnswerAdvisor
-                .builder(vectorStore)
-                .searchRequest(SearchRequest
-                        .builder()
-                        .topK(5)
-                        .similarityThreshold(0.0)
-                        .filterExpression(finalFilter)
-                        .build())
+                .builder(this, notebookId)
+                .selectedSourceIds(selectedSourceIds)
+                .topK(5)
                 .build();
     }
 
-    @Retryable(backoff = @Backoff(delay = 2000))
-    public void deleteIndexedSource(UUID sourceId) {
-        if (vectorStore == null)
-            return;
-        vectorStore.delete(new Filter.Expression(
-                Filter.ExpressionType.EQ,
-                new Filter.Key("sourceId"),
-                new Filter.Value(sourceId.toString())
-        ));
-    }
+    public List<Document> search(UUID notebookId, List<UUID> selectedSourceIds, String query, int limit) {
+        if (query == null || query.isBlank() || limit <= 0) {
+            return List.of();
+        }
 
-    @Retryable(backoff = @Backoff(delay = 2000))
-    public void deleteIndexedNotebook(UUID notebookId) {
-        if (vectorStore == null)
-            return;
-        vectorStore.delete(new Filter.Expression(
-                Filter.ExpressionType.EQ,
-                new Filter.Key("notebookId"),
-                new Filter.Value(notebookId.toString())
-        ));
+        List<SourceChunk> chunks;
+        if (selectedSourceIds != null && !selectedSourceIds.isEmpty()) {
+            chunks = chunkRepository.searchByNotebookAndSources(notebookId, selectedSourceIds, query, limit);
+        } else {
+            chunks = chunkRepository.searchByNotebook(notebookId, query, limit);
+        }
+
+        if (chunks.isEmpty()) {
+            chunks = fallbackSearch(notebookId, selectedSourceIds, query, limit);
+        }
+
+        return chunks.stream().map(RetrievalService::toDocument).toList();
     }
 
     public List<Document> getDocumentsForNotebook(UUID notebookId, String query, int limit) {
-        if (vectorStore == null)
-            return List.of();
         try {
-            SearchRequest searchRequest = SearchRequest
-                    .builder()
-                    .query(query)
-                    .topK(limit)
-                    .similarityThreshold(0.0)
-                    .filterExpression(new Filter.Expression(
-                            Filter.ExpressionType.EQ,
-                            new Filter.Key("notebookId"),
-                            new Filter.Value(notebookId.toString())
-                    ))
-                    .build();
-            List<Document> results = vectorStore.similaritySearch(searchRequest);
+            List<Document> results = search(notebookId, null, query, limit);
 
             List<Document> substantiveResults = results
                     .stream()
@@ -106,12 +66,76 @@ public class RetrievalService {
         }
     }
 
-    public void indexSourceChunks(List<Document> chunks) {
-        if (vectorStore == null)
-            return;
-        try {
-            vectorStore.add(chunks);
-        } catch (Exception ignored) {
+    private List<SourceChunk> fallbackSearch(UUID notebookId, List<UUID> selectedSourceIds, String query, int limit) {
+        Set<String> tokens = extractTokens(query);
+        if (tokens.isEmpty()) {
+            return List.of();
         }
+
+        List<SourceChunk> candidates = chunkRepository.findByNotebookIdOrderByChunkIndexAsc(
+                notebookId,
+                PageRequest.of(0, FALLBACK_SCAN_SIZE)
+        );
+
+        List<ScoredChunk> scored = new ArrayList<>();
+        for (SourceChunk chunk : candidates) {
+            if (selectedSourceIds != null && !selectedSourceIds.isEmpty() && !selectedSourceIds.contains(chunk.getSourceId())) {
+                continue;
+            }
+            if (chunk.getContent() == null) {
+                continue;
+            }
+            String lower = chunk.getContent().toLowerCase();
+            long hits = tokens.stream().filter(lower::contains).count();
+            if (hits > 0) {
+                scored.add(new ScoredChunk(chunk, hits));
+            }
+        }
+
+        return scored
+                .stream()
+                .sorted((a, b) -> Long.compare(b.hits(), a.hits()))
+                .limit(limit)
+                .map(ScoredChunk::chunk)
+                .toList();
+    }
+
+    private static Set<String> extractTokens(String query) {
+        Set<String> tokens = new HashSet<>();
+        for (String token : query.toLowerCase().split("[^\\p{L}\\p{N}]+")) {
+            if (token.length() >= 3) {
+                tokens.add(token);
+            }
+            if (tokens.size() >= 8) {
+                break;
+            }
+        }
+        return tokens;
+    }
+
+    private static Document toDocument(SourceChunk chunk) {
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("sourceId", chunk.getSourceId().toString());
+        metadata.put("notebookId", chunk.getNotebookId().toString());
+        metadata.put(
+                "title",
+                chunk.getTitle() != null ?
+                        chunk.getTitle() :
+                        "Untitled"
+        );
+        metadata.put(
+                "link",
+                chunk.getLink() != null ?
+                        chunk.getLink() :
+                        ""
+        );
+        metadata.put("chunkIndex", String.valueOf(chunk.getChunkIndex()));
+        return new Document(chunk.getId().toString(), chunk.getContent(), metadata);
+    }
+
+    private record ScoredChunk(
+            SourceChunk chunk,
+            long hits
+    ) {
     }
 }

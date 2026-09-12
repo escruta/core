@@ -17,7 +17,6 @@ RUN java --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allo
     -XX:AOTCacheOutput=app.aot \
     -Dspring.context.exit=onRefresh \
     -Dspring.jpa.hibernate.ddl-auto=none \
-    -Dspring.ai.vectorstore.type=none \
     -jar core.jar
 
 EXPOSE 8080

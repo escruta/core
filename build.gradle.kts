@@ -37,8 +37,6 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.springframework.ai:spring-ai-starter-model-openai")
-    implementation("org.springframework.ai:spring-ai-starter-vector-store-qdrant")
-    implementation("org.springframework.ai:spring-ai-vector-store-advisor")
     implementation("jakarta.activation:jakarta.activation-api:2.1.4")
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
     compileOnly("org.projectlombok:lombok:1.18.46")

@@ -74,15 +74,7 @@ public class ChatController {
         String query = "core concepts key ideas summary main topic definitions overview";
         var documents = retrievalService.getDocumentsForNotebook(notebookId, query, documentLimit);
         if (documents.isEmpty()) {
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException ignored) {
-                Thread.currentThread().interrupt();
-            }
-            documents = retrievalService.getDocumentsForNotebook(notebookId, query, documentLimit);
-            if (documents.isEmpty()) {
-                return Optional.empty();
-            }
+            return Optional.empty();
         }
 
         String context = documents

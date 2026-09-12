@@ -42,18 +42,6 @@ spring:
         model: ${ESCRUTA_AI_MODEL:}
         temperature: 0.5
         reasoning-effort: low
-      embedding:
-        model: ${ESCRUTA_AI_EMBEDDING_MODEL:}
-        base-url: ${ESCRUTA_AI_EMBEDDING_BASE_URL:${ESCRUTA_AI_BASE_URL:}}
-        api-key: ${ESCRUTA_AI_EMBEDDING_API_KEY:${ESCRUTA_AI_API_KEY:}}
-    vectorstore:
-      qdrant:
-        initialize-schema: true
-        host: ${ESCRUTA_VDB_HOST:localhost}
-        port: ${ESCRUTA_VDB_PORT:6334}
-        api-key: ${ESCRUTA_VDB_API_KEY}
-        collection-name: ${ESCRUTA_VDB_COLLECTION:escruta}
-        use-tls: ${ESCRUTA_VDB_USE_TLS:false}
     retry:
       exclude-on-http-codes: 429
 logging:
