@@ -1,8 +1,6 @@
 package com.escruta.core.configs;
 
-import com.escruta.core.repositories.UserRepository;
 import com.escruta.core.services.TokenService;
-import jakarta.servlet.http.Cookie;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -10,20 +8,14 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseCookie;
-import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.config.Customizer;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.core.DefaultOAuth2AuthenticatedPrincipal;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.introspection.OpaqueTokenIntrospector;
@@ -34,8 +26,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.time.Duration;
-import java.time.Instant;
 import java.util.*;
 
 @Configuration
@@ -43,7 +33,6 @@ import java.util.*;
 @EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfiguration {
-    private final UserRepository userRepository;
     private final TokenService tokenService;
 
     @Value("${security.cors.allowedOrigins}")
@@ -55,13 +44,6 @@ public class SecurityConfiguration {
     @Value("${security.cors.allowCredentials}")
     private boolean allowCredentials;
 
-    @Value("${security.cookie.name:escruta_token}")
-    private String cookieName;
-    @Value("${security.cookie.domain:}")
-    private String cookieDomain;
-    @Value("${security.cookie.secure:true}")
-    private boolean cookieSecure;
-
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) {
         http
@@ -69,9 +51,9 @@ public class SecurityConfiguration {
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests((authorize) -> authorize
-                        .requestMatchers(HttpMethod.POST, "/login", "/register", "/introspect", "/device/start")
+                        .requestMatchers(HttpMethod.POST, "/auth/**")
                         .permitAll()
-                        .requestMatchers(HttpMethod.GET, "/", "/device/token")
+                        .requestMatchers(HttpMethod.GET, "/")
                         .permitAll()
                         .anyRequest()
                         .authenticated())
@@ -81,7 +63,6 @@ public class SecurityConfiguration {
                 .logout(logout -> logout
                         .logoutUrl("/logout")
                         .addLogoutHandler(logoutHandler())
-                        .addLogoutHandler(clearCookieLogoutHandler())
                         .logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler(HttpStatus.OK)));
 
         return http.build();
@@ -94,13 +75,6 @@ public class SecurityConfiguration {
             if (header != null && header.toLowerCase().startsWith("bearer ")) {
                 return header.substring(7).trim();
             }
-            if (request.getCookies() != null) {
-                for (Cookie cookie : request.getCookies()) {
-                    if (cookieName.equals(cookie.getName())) {
-                        return cookie.getValue();
-                    }
-                }
-            }
             return null;
         };
     }
@@ -112,24 +86,6 @@ public class SecurityConfiguration {
             if (token != null) {
                 tokenService.invalidateToken(token);
             }
-        };
-    }
-
-    @Bean
-    public LogoutHandler clearCookieLogoutHandler() {
-        return (_, response, _) -> {
-            ResponseCookie cookie = ResponseCookie
-                    .from(cookieName, "")
-                    .httpOnly(true)
-                    .secure(cookieSecure)
-                    .sameSite("Lax")
-                    .path("/")
-                    .maxAge(0)
-                    .domain(cookieDomain.isBlank() ?
-                            null :
-                            cookieDomain)
-                    .build();
-            response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
         };
     }
 
@@ -153,23 +109,6 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) {
-        return config.getAuthenticationManager();
-    }
-
-    @Bean
-    UserDetailsService userDetailsService() {
-        return email -> userRepository
-                .findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User with the given email not found"));
-    }
-
-    @Bean
-    public BCryptPasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
-
-    @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
@@ -187,19 +126,5 @@ public class SecurityConfiguration {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
-    }
-
-    public ResponseCookie buildAuthCookie(String rawToken, Instant expiresAt) {
-        return ResponseCookie
-                .from(cookieName, rawToken)
-                .httpOnly(true)
-                .secure(cookieSecure)
-                .sameSite("Lax")
-                .path("/")
-                .maxAge(Duration.between(Instant.now(), expiresAt))
-                .domain(cookieDomain.isBlank() ?
-                        null :
-                        cookieDomain)
-                .build();
     }
 }

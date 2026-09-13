@@ -1,15 +1,12 @@
 package com.escruta.core.controllers;
 
-import com.escruta.core.dtos.ChangePasswordDto;
 import com.escruta.core.entities.User;
 import com.escruta.core.services.UserService;
-import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -29,9 +26,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class UserControllerTest {
     @Autowired
     private WebApplicationContext context;
-
-    @Autowired
-    private ObjectMapper objectMapper;
 
     private MockMvc mockMvc;
 
@@ -68,38 +62,6 @@ class UserControllerTest {
         mockMvc.perform(post("/users/change-name").param("newName", "New Name")).andExpect(status().isOk());
 
         verify(userService).changeName("New Name");
-    }
-
-    @Test
-    @WithMockUser
-    @DisplayName("Should change password successfully when authenticated")
-    void changePassword_shouldChangePasswordWhenAuthenticated() throws Exception {
-        ChangePasswordDto dto = new ChangePasswordDto();
-        dto.setCurrentPassword("OldPassword123");
-        dto.setNewPassword("NewPassword123");
-
-        mockMvc
-                .perform(post("/users/change-password")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
-                .andExpect(status().isOk());
-
-        verify(userService).changePassword(any(ChangePasswordDto.class));
-    }
-
-    @Test
-    @WithMockUser
-    @DisplayName("Should return 400 when change password request is invalid")
-    void changePassword_shouldReturn400WhenInvalid() throws Exception {
-        ChangePasswordDto dto = new ChangePasswordDto();
-        dto.setCurrentPassword("short");
-        dto.setNewPassword("weak");
-
-        mockMvc
-                .perform(post("/users/change-password")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
-                .andExpect(status().isBadRequest());
     }
 
     @Test

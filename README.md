@@ -30,25 +30,33 @@ Built with Java 25, Spring Boot 4.1, Spring AI, MariaDB, and Lombok.
 The application can be configured using environment variables. These can be set in your shell or passed to the
 application at runtime.
 
-| Variable                             | Description                                              | Default                                 |
-|--------------------------------------|----------------------------------------------------------|-----------------------------------------|
-| `ESCRUTA_PORT`                       | Backend port                                             | `8080`                                  |
-| `ESCRUTA_DB_URL`                     | JDBC URL for the database                                | `jdbc:mariadb://localhost:3306/escruta` |
-| `ESCRUTA_DB_USER`                    | Database username                                        | `root`                                  |
-| `ESCRUTA_DB_PASSWORD`                | Database password                                        | `1234`                                  |
-| `ESCRUTA_KV_HOST`                    | Redis database host                                      | `localhost`                             |
-| `ESCRUTA_KV_PORT`                    | Redis database port                                      | `6379`                                  |
-| `ESCRUTA_KV_PASSWORD`                | Redis database password                                  |                                         |
-| `ESCRUTA_AI_BASE_URL`                | Base URL for the AI provider                             | (Required)                              |
-| `ESCRUTA_AI_API_KEY`                 | API Key for the AI provider                              | (Required)                              |
-| `ESCRUTA_AI_MODEL`                   | AI model to use for chat                                 | (Required)                              |
-| `ESCRUTA_CORS_ALLOWED_ORIGINS`       | Allowed origins for CORS                                 | `http://localhost:5173`                 |
-| `ESCRUTA_SESSION_EXPIRATION_SECONDS` | Session expiration interval (seconds)                    | `3600`                                  |
-| `ESCRUTA_COOKIE_NAME`                | Name of the auth session cookie                          | `escruta_token`                         |
-| `ESCRUTA_COOKIE_DOMAIN`              | Cookie domain (e.g. `.escruta.com`); empty for host-only | ``                                      |
-| `ESCRUTA_COOKIE_SECURE`              | Set `Secure` on the auth cookie (HTTPS)                  | `true`                                  |
-| `ESCRUTA_HELPER_URL`                 | Helper service URL (search + extract)                    | `http://localhost:8000`                 |
-| `ESCRUTA_HELPER_API_KEY`             | Internal API Key for the Helper                          | (Required)                              |
+| Variable                                      | Description                                              | Default                                 |
+|-----------------------------------------------|----------------------------------------------------------|-----------------------------------------|
+| `ESCRUTA_PORT`                                | Backend port                                             | `8080`                                  |
+| `ESCRUTA_DB_URL`                              | JDBC URL for the database                                | `jdbc:mariadb://localhost:3306/escruta` |
+| `ESCRUTA_DB_USER`                             | Database username                                        | `root`                                  |
+| `ESCRUTA_DB_PASSWORD`                         | Database password                                        | `1234`                                  |
+| `ESCRUTA_KV_HOST`                             | Redis database host                                      | `localhost`                             |
+| `ESCRUTA_KV_PORT`                             | Redis database port                                      | `6379`                                  |
+| `ESCRUTA_KV_PASSWORD`                         | Redis database password                                  |                                         |
+| `ESCRUTA_AI_BASE_URL`                         | Base URL for the AI provider                             | (Required)                              |
+| `ESCRUTA_AI_API_KEY`                          | API Key for the AI provider                              | (Required)                              |
+| `ESCRUTA_AI_MODEL`                            | AI model to use for chat                                 | (Required)                              |
+| `ESCRUTA_CORS_ALLOWED_ORIGINS`                | Allowed origins for CORS                                 | `http://localhost:5173`                 |
+| `ESCRUTA_SESSION_EXPIRATION_SECONDS`          | Session expiration interval (seconds)                    | `3600`                                  |
+| `ESCRUTA_AUTH_CODE_LENGTH`                    | Verification code length (digits)                        | `6`                                     |
+| `ESCRUTA_AUTH_CODE_TTL_SECONDS`               | Verification code lifetime (seconds)                     | `600`                                   |
+| `ESCRUTA_AUTH_CODE_MAX_ATTEMPTS`              | Max verification attempts per code                       | `5`                                     |
+| `ESCRUTA_AUTH_VERIFICATION_TOKEN_TTL_SECONDS` | Registration token lifetime (seconds)                    | `900`                                   |
+| `ESCRUTA_MAIL_HOST`                           | SMTP host; empty disables email sending (code is logged) |                                         |
+| `ESCRUTA_MAIL_PORT`                           | SMTP port                                                | `587`                                   |
+| `ESCRUTA_MAIL_USERNAME`                       | SMTP username                                            |                                         |
+| `ESCRUTA_MAIL_PASSWORD`                       | SMTP password                                            |                                         |
+| `ESCRUTA_MAIL_SMTP_AUTH`                      | Enable SMTP auth                                         | `true`                                  |
+| `ESCRUTA_MAIL_SMTP_STARTTLS`                  | Enable SMTP STARTTLS                                     | `true`                                  |
+| `ESCRUTA_MAIL_FROM`                           | Sender address for verification emails                   | `noreply@escruta.com`                   |
+| `ESCRUTA_HELPER_URL`                          | Helper service URL (search + extract)                    | `http://localhost:8000`                 |
+| `ESCRUTA_HELPER_API_KEY`                      | Internal API Key for the Helper                          | (Required)                              |
 
 See [application.yml](./src/main/resources/application.yml) for the full list of configuration options.
 
@@ -93,7 +101,7 @@ generates coverage reports automatically after test execution.
 Ensure you have a MariaDB database named `escruta_test`:
 
 ```bash
-mariadb -u root -p1234 -e "CREATE DATABASE escruta_test;"
+mariadb -h127.0.0.1 -u root -p1234 -e "CREATE DATABASE escruta_test;"
 ```
 
 ### Running Tests

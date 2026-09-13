@@ -1,82 +1,59 @@
 package com.escruta.core.controllers;
 
-import com.escruta.core.configs.SecurityConfiguration;
 import com.escruta.core.dtos.AccessTokenResponse;
-import com.escruta.core.dtos.LoginUserDto;
-import com.escruta.core.dtos.RegisterUserDto;
-import com.escruta.core.entities.AccessToken;
+import com.escruta.core.dtos.BasicUser;
+import com.escruta.core.dtos.CompleteRegistrationRequest;
+import com.escruta.core.dtos.RequestEmailCodeRequest;
+import com.escruta.core.dtos.VerifyEmailCodeRequest;
+import com.escruta.core.dtos.VerifyEmailCodeResponse;
+import com.escruta.core.services.AuthCodeService;
 import com.escruta.core.services.TokenService;
-import com.escruta.core.services.UserService;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
 @RestController
+@RequestMapping("/auth")
 @RequiredArgsConstructor
 public class AuthenticationController {
-    private final AuthenticationManager authenticationManager;
-    private final UserService userService;
+    private final AuthCodeService authCodeService;
     private final TokenService tokenService;
-    private final SecurityConfiguration securityConfiguration;
 
-    private Authentication authenticate(String email, String password) {
-        var request = UsernamePasswordAuthenticationToken.unauthenticated(email, password);
-        return this.authenticationManager.authenticate(request);
+    @PostMapping("/request-code")
+    public ResponseEntity<Void> requestCode(@Valid @RequestBody RequestEmailCodeRequest request) {
+        authCodeService.requestCode(request.email());
+        return ResponseEntity.ok().build();
     }
 
-    private com.escruta.core.entities.User authenticatedUser(Authentication authentication) {
-        var principal = authentication.getPrincipal();
-        if (!(principal instanceof com.escruta.core.entities.User user)) {
-            throw new BadCredentialsException("Invalid authentication principal");
+    @PostMapping("/verify-code")
+    public ResponseEntity<VerifyEmailCodeResponse> verifyCode(
+            @Valid @RequestBody VerifyEmailCodeRequest request
+    ) {
+        var outcome = authCodeService.verifyCode(request.email(), request.code());
+        if (outcome.newUser()) {
+            return ResponseEntity.ok(VerifyEmailCodeResponse.newUser(outcome.verificationToken()));
         }
-        return user;
+        return ResponseEntity.ok(VerifyEmailCodeResponse.existingUser(
+                new AccessTokenResponse(outcome.session()),
+                new BasicUser(outcome.user())
+        ));
     }
 
-    private void setAuthCookie(HttpServletResponse response, AccessToken accessToken) {
-        ResponseCookie cookie = securityConfiguration.buildAuthCookie(
-                accessToken.getToken(),
-                accessToken.getExpiresAt()
-        );
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
-    }
-
-    @PostMapping("/login")
-    public ResponseEntity<AccessTokenResponse> login(
-            @Valid @RequestBody LoginUserDto loginUserDto,
-            HttpServletResponse response
+    @PostMapping("/complete-registration")
+    public ResponseEntity<AccessTokenResponse> completeRegistration(
+            @Valid @RequestBody CompleteRegistrationRequest request
     ) {
-        var authentication = this.authenticate(loginUserDto.getEmail(), loginUserDto.getPassword());
-        var user = authenticatedUser(authentication);
-        var accessToken = tokenService.createToken(user.getId());
-        setAuthCookie(response, accessToken);
-        return ResponseEntity.ok(new AccessTokenResponse(accessToken));
-    }
-
-    @PostMapping("/register")
-    public ResponseEntity<AccessTokenResponse> register(
-            @Valid @RequestBody RegisterUserDto registerUserDto,
-            HttpServletResponse response
-    ) {
-        var registeredUser = userService.register(registerUserDto);
-        var authentication = this.authenticate(registeredUser.getEmail(), registerUserDto.getPassword());
-        var user = authenticatedUser(authentication);
-        var accessToken = tokenService.createToken(user.getId());
-        setAuthCookie(response, accessToken);
-        return ResponseEntity.status(HttpStatus.CREATED).body(new AccessTokenResponse(accessToken));
+        var outcome = authCodeService.completeRegistration(
+                request.email(), request.verificationToken(), request.name());
+        return ResponseEntity.status(HttpStatus.CREATED).body(new AccessTokenResponse(outcome.session()));
     }
 
     @PostMapping("/introspect")

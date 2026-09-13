@@ -13,8 +13,7 @@ CREATE TABLE users
     updated_at datetime(6),
     id         binary(16)   NOT NULL PRIMARY KEY,
     email      varchar(100) NOT NULL UNIQUE,
-    name       varchar(255) NOT NULL,
-    password   varchar(255) NOT NULL
+    name       varchar(255) NOT NULL
 );
 
 CREATE TABLE folders

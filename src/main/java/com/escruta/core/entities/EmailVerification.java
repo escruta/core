@@ -1,24 +1,23 @@
 package com.escruta.core.entities;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.redis.core.RedisHash;
 import org.springframework.data.redis.core.TimeToLive;
-import lombok.Getter;
-import lombok.Setter;
 
 import java.time.Instant;
 
-@RedisHash("device_authorizations")
+@RedisHash("email_verifications")
 @Getter
 @Setter
-public class DeviceAuthorization {
+public class EmailVerification {
     @Id
-    private String deviceCode;
-    private java.util.UUID userId;
     private String token;
-    private Instant tokenExpiresAt;
-    private boolean authorized;
-    private boolean consumed;
+
+    private String email;
+
+    private Instant expiresAt;
 
     @TimeToLive
     private Long timeToLive;

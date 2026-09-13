@@ -1,22 +1,28 @@
 package com.escruta.core.integration;
 
-import com.escruta.core.dtos.LoginUserDto;
-import com.escruta.core.dtos.RegisterUserDto;
+import com.escruta.core.dtos.CompleteRegistrationRequest;
+import com.escruta.core.dtos.RequestEmailCodeRequest;
+import com.escruta.core.dtos.VerifyEmailCodeRequest;
 import com.escruta.core.dtos.notebook.NotebookCreationDTO;
+import com.escruta.core.services.EmailService;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import jakarta.servlet.Filter;
 import org.junit.jupiter.api.*;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -31,6 +37,9 @@ class UserJourneyIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @MockitoBean
+    private EmailService emailService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -42,21 +51,51 @@ class UserJourneyIntegrationTest {
     private static String authToken;
     private static String userEmail;
 
+    private String requestCodeAndCapture(String email) throws Exception {
+        mockMvc
+                .perform(post("/auth/request-code")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new RequestEmailCodeRequest(email))))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<String> codeCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailService, atLeastOnce()).sendVerificationCode(
+                org.mockito.ArgumentMatchers.eq(email),
+                codeCaptor.capture()
+        );
+        String code = codeCaptor.getValue();
+        assertThat(code).isNotNull().isNotEmpty();
+        return code;
+    }
+
     @Test
     @Order(1)
     @DisplayName("1. Register new user successfully")
     void step1_registerUser() throws Exception {
         userEmail = "integration-test-" + System.currentTimeMillis() + "@example.com";
 
-        RegisterUserDto dto = new RegisterUserDto();
-        dto.setEmail(userEmail);
-        dto.setPassword("Password123");
-        dto.setName("Integration Test User");
+        String code = requestCodeAndCapture(userEmail);
+
+        MvcResult verifyResult = mockMvc
+                .perform(post("/auth/verify-code")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new VerifyEmailCodeRequest(userEmail, code))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.newUser").value(true))
+                .andExpect(jsonPath("$.verificationToken").exists())
+                .andReturn();
+
+        JsonNode verifyResponse = objectMapper.readTree(verifyResult.getResponse().getContentAsString());
+        String verificationToken = verifyResponse.get("verificationToken").asString();
 
         MvcResult result = mockMvc
-                .perform(post("/register")
+                .perform(post("/auth/complete-registration")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+                        .content(objectMapper.writeValueAsString(new CompleteRegistrationRequest(
+                                userEmail,
+                                verificationToken,
+                                "Integration Test User"
+                        ))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.token").exists())
                 .andReturn();
@@ -72,7 +111,7 @@ class UserJourneyIntegrationTest {
     @DisplayName("2. Introspect token and verify it's active")
     void step2_introspectToken() throws Exception {
         mockMvc
-                .perform(post("/introspect").param("token", authToken))
+                .perform(post("/auth/introspect").param("token", authToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.active").value(true))
                 .andExpect(jsonPath("$.sub").exists());
@@ -140,32 +179,29 @@ class UserJourneyIntegrationTest {
 
     @Test
     @Order(8)
-    @DisplayName("8. Login with valid credentials")
-    void step8_loginWithValidCredentials() throws Exception {
-        LoginUserDto dto = new LoginUserDto();
-        dto.setEmail(userEmail);
-        dto.setPassword("Password123");
+    @DisplayName("8. Login existing user with code")
+    void step8_loginExistingUserWithCode() throws Exception {
+        String code = requestCodeAndCapture(userEmail);
 
         mockMvc
-                .perform(post("/login")
+                .perform(post("/auth/verify-code")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+                        .content(objectMapper.writeValueAsString(new VerifyEmailCodeRequest(userEmail, code))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.token").exists());
+                .andExpect(jsonPath("$.newUser").value(false))
+                .andExpect(jsonPath("$.session.token").exists());
     }
 
     @Test
     @Order(9)
-    @DisplayName("9. Login with invalid credentials should fail")
-    void step9_loginWithInvalidCredentialsShouldFail() throws Exception {
-        LoginUserDto dto = new LoginUserDto();
-        dto.setEmail(userEmail);
-        dto.setPassword("WrongPassword123");
+    @DisplayName("9. Verify with wrong code should fail")
+    void step9_verifyWithWrongCodeShouldFail() throws Exception {
+        requestCodeAndCapture(userEmail);
 
         mockMvc
-                .perform(post("/login")
+                .perform(post("/auth/verify-code")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+                        .content(objectMapper.writeValueAsString(new VerifyEmailCodeRequest(userEmail, "000000"))))
                 .andExpect(status().isUnauthorized());
     }
 }

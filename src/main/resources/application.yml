@@ -34,6 +34,18 @@ spring:
       host: ${ESCRUTA_KV_HOST:localhost}
       port: ${ESCRUTA_KV_PORT:6379}
       password: ${ESCRUTA_KV_PASSWORD:}
+  mail:
+    host: ${ESCRUTA_MAIL_HOST:}
+    port: ${ESCRUTA_MAIL_PORT:587}
+    username: ${ESCRUTA_MAIL_USERNAME:}
+    password: ${ESCRUTA_MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${ESCRUTA_MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${ESCRUTA_MAIL_SMTP_STARTTLS:true}
+    from: ${ESCRUTA_MAIL_FROM:noreply@escruta.com}
   ai:
     openai:
       base-url: ${ESCRUTA_AI_BASE_URL:}
@@ -50,10 +62,11 @@ logging:
 security:
   session:
     expiration-interval-seconds: ${ESCRUTA_SESSION_EXPIRATION_SECONDS:3600}
-  cookie:
-    name: ${ESCRUTA_COOKIE_NAME:escruta_token}
-    domain: ${ESCRUTA_COOKIE_DOMAIN:}
-    secure: ${ESCRUTA_COOKIE_SECURE:true}
+  auth-code:
+    length: ${ESCRUTA_AUTH_CODE_LENGTH:6}
+    ttl-seconds: ${ESCRUTA_AUTH_CODE_TTL_SECONDS:600}
+    max-attempts: ${ESCRUTA_AUTH_CODE_MAX_ATTEMPTS:5}
+    verification-token-ttl-seconds: ${ESCRUTA_AUTH_VERIFICATION_TOKEN_TTL_SECONDS:900}
   cors:
     allowedOrigins: ${ESCRUTA_CORS_ALLOWED_ORIGINS:*}
     allowedMethods: GET,POST,PUT,PATCH,DELETE,OPTIONS

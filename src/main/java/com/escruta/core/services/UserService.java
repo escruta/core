@@ -1,7 +1,5 @@
 package com.escruta.core.services;
 
-import com.escruta.core.dtos.ChangePasswordDto;
-import com.escruta.core.dtos.RegisterUserDto;
 import com.escruta.core.entities.User;
 import com.escruta.core.exceptions.DuplicateFieldException;
 import com.escruta.core.repositories.AccessTokenRepository;
@@ -11,10 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -22,7 +20,6 @@ import java.util.UUID;
 public class UserService {
     private final UserRepository userRepository;
     private final AccessTokenRepository accessTokenRepository;
-    private final PasswordEncoder passwordEncoder;
 
     public UUID getUserId() {
         var user = getCurrentUser();
@@ -47,15 +44,19 @@ public class UserService {
         return null;
     }
 
-    public User register(RegisterUserDto input) {
-        if (userRepository.existsByEmail(input.getEmail())) {
-            throw new DuplicateFieldException("email", input.getEmail());
+    public Optional<User> findByEmail(String email) {
+        return userRepository.findByEmail(email.trim().toLowerCase());
+    }
+
+    public User createUser(String name, String email) {
+        String normalizedEmail = email.trim().toLowerCase();
+        if (userRepository.existsByEmail(normalizedEmail)) {
+            throw new DuplicateFieldException("email", normalizedEmail);
         }
 
         var user = new User();
-        user.setName(input.getName());
-        user.setEmail(input.getEmail());
-        user.setPassword(passwordEncoder.encode(input.getPassword()));
+        user.setName(name.trim());
+        user.setEmail(normalizedEmail);
         return userRepository.save(user);
     }
 
@@ -65,18 +66,6 @@ public class UserService {
             throw new BadCredentialsException("User not authenticated");
         }
         currentUser.setName(newName);
-        userRepository.save(currentUser);
-    }
-
-    public void changePassword(ChangePasswordDto changePasswordDto) {
-        User currentUser = getCurrentUser();
-        if (currentUser == null) {
-            throw new BadCredentialsException("User not authenticated");
-        }
-        if (!passwordEncoder.matches(changePasswordDto.getCurrentPassword(), currentUser.getPassword())) {
-            throw new BadCredentialsException("Current password is incorrect");
-        }
-        currentUser.setPassword(passwordEncoder.encode(changePasswordDto.getNewPassword()));
         userRepository.save(currentUser);
     }
 

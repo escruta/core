@@ -1,7 +1,5 @@
 package com.escruta.core.services;
 
-import com.escruta.core.dtos.ChangePasswordDto;
-import com.escruta.core.dtos.RegisterUserDto;
 import com.escruta.core.entities.User;
 import com.escruta.core.exceptions.DuplicateFieldException;
 import com.escruta.core.repositories.AccessTokenRepository;
@@ -19,7 +17,6 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
 
 import java.util.Optional;
@@ -37,9 +34,6 @@ class UserServiceTest {
     @Mock
     private AccessTokenRepository accessTokenRepository;
 
-    @Mock
-    private PasswordEncoder passwordEncoder;
-
     @InjectMocks
     private UserService userService;
 
@@ -53,7 +47,6 @@ class UserServiceTest {
     private OAuth2AuthenticatedPrincipal principal;
 
     private static final String TEST_EMAIL = "test@example.com";
-    private static final String TEST_PASSWORD = "Password123";
     private static final String TEST_NAME = "Test User";
 
     @BeforeEach
@@ -124,27 +117,20 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("Should register new user successfully")
-    void register_shouldRegisterNewUser() {
-        RegisterUserDto dto = new RegisterUserDto();
-        dto.setEmail(TEST_EMAIL);
-        dto.setPassword(TEST_PASSWORD);
-        dto.setName(TEST_NAME);
-
+    @DisplayName("Should create new user successfully")
+    void createUser_shouldCreateNewUser() {
         when(userRepository.existsByEmail(TEST_EMAIL)).thenReturn(false);
-        when(passwordEncoder.encode(TEST_PASSWORD)).thenReturn("encodedPassword");
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
             User savedUser = invocation.getArgument(0);
             savedUser.setId(UUID.randomUUID());
             return savedUser;
         });
 
-        User result = userService.register(dto);
+        User result = userService.createUser(TEST_NAME, TEST_EMAIL);
 
         assertThat(result).isNotNull();
         assertThat(result.getEmail()).isEqualTo(TEST_EMAIL);
         assertThat(result.getName()).isEqualTo(TEST_NAME);
-        assertThat(result.getPassword()).isEqualTo("encodedPassword");
 
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(userCaptor.capture());
@@ -153,19 +139,26 @@ class UserServiceTest {
 
     @Test
     @DisplayName("Should throw exception when email already exists")
-    void register_shouldThrowExceptionWhenEmailExists() {
-        RegisterUserDto dto = new RegisterUserDto();
-        dto.setEmail(TEST_EMAIL);
-        dto.setPassword(TEST_PASSWORD);
-        dto.setName(TEST_NAME);
-
+    void createUser_shouldThrowExceptionWhenEmailExists() {
         when(userRepository.existsByEmail(TEST_EMAIL)).thenReturn(true);
 
-        assertThatThrownBy(() -> userService.register(dto))
+        assertThatThrownBy(() -> userService.createUser(TEST_NAME, TEST_EMAIL))
                 .isInstanceOf(DuplicateFieldException.class)
                 .hasMessageContaining("email");
 
         verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Should find user by email")
+    void findByEmail_shouldReturnUserWhenExists() {
+        User user = createTestUser(UUID.randomUUID());
+        when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(user));
+
+        Optional<User> result = userService.findByEmail(TEST_EMAIL);
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getEmail()).isEqualTo(TEST_EMAIL);
     }
 
     @Test
@@ -195,56 +188,6 @@ class UserServiceTest {
         assertThatThrownBy(() -> userService.changeName("New Name"))
                 .isInstanceOf(BadCredentialsException.class)
                 .hasMessageContaining("not authenticated");
-
-        verify(userRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("Should change password successfully")
-    void changePassword_shouldChangePassword() {
-        UUID userId = UUID.randomUUID();
-        User user = createTestUser(userId);
-        user.setPassword("currentEncodedPassword");
-
-        ChangePasswordDto dto = new ChangePasswordDto();
-        dto.setCurrentPassword("currentPassword");
-        dto.setNewPassword("NewPassword123");
-
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.isAuthenticated()).thenReturn(true);
-        when(authentication.getPrincipal()).thenReturn(principal);
-        when(principal.getAttribute("sub")).thenReturn(user.getId().toString());
-        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
-        when(passwordEncoder.matches(dto.getCurrentPassword(), user.getPassword())).thenReturn(true);
-        when(passwordEncoder.encode(dto.getNewPassword())).thenReturn("newEncodedPassword");
-
-        userService.changePassword(dto);
-
-        assertThat(user.getPassword()).isEqualTo("newEncodedPassword");
-        verify(userRepository).save(user);
-    }
-
-    @Test
-    @DisplayName("Should throw exception when current password is incorrect")
-    void changePassword_shouldThrowExceptionWhenCurrentPasswordIncorrect() {
-        UUID userId = UUID.randomUUID();
-        User user = createTestUser(userId);
-        user.setPassword("encodedPassword");
-
-        ChangePasswordDto dto = new ChangePasswordDto();
-        dto.setCurrentPassword("wrongPassword");
-        dto.setNewPassword("NewPassword123");
-
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.isAuthenticated()).thenReturn(true);
-        when(authentication.getPrincipal()).thenReturn(principal);
-        when(principal.getAttribute("sub")).thenReturn(user.getId().toString());
-        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
-        when(passwordEncoder.matches(dto.getCurrentPassword(), user.getPassword())).thenReturn(false);
-
-        assertThatThrownBy(() -> userService.changePassword(dto))
-                .isInstanceOf(BadCredentialsException.class)
-                .hasMessageContaining("Current password is incorrect");
 
         verify(userRepository, never()).save(any());
     }
@@ -285,7 +228,6 @@ class UserServiceTest {
         user.setId(id);
         user.setEmail(TEST_EMAIL);
         user.setName(TEST_NAME);
-        user.setPassword(TEST_PASSWORD);
         user.setNotebooks(new java.util.ArrayList<>());
         return user;
     }
