@@ -10,6 +10,7 @@ import java.util.UUID;
 public record SourceWithContentDTO(
         UUID id,
         UUID notebookId,
+        UUID groupId,
         String icon,
         String title,
         String content,
@@ -25,6 +26,9 @@ public record SourceWithContentDTO(
         this(
                 source.getId(),
                 source.getNotebook().getId(),
+                source.getSourceGroup() != null ?
+                        source.getSourceGroup().getId() :
+                        null,
                 source.getIcon(),
                 source.getTitle(),
                 source.getContent(),

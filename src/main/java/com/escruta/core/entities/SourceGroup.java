@@ -1,0 +1,39 @@
+package com.escruta.core.entities;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.sql.Timestamp;
+import java.util.UUID;
+
+@Getter
+@Setter
+@Table(name = "source_groups")
+@Entity
+public class SourceGroup {
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(nullable = false)
+    private UUID id;
+
+    @ManyToOne
+    @JoinColumn(nullable = false)
+    private Notebook notebook;
+
+    @Column(nullable = false)
+    private String title;
+
+    @Column()
+    private String color;
+
+    @CreationTimestamp
+    @Column(updatable = false)
+    private Timestamp createdAt;
+
+    @UpdateTimestamp
+    @Column()
+    private Timestamp updatedAt;
+}

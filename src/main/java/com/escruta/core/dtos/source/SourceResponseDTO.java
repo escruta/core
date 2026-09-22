@@ -10,6 +10,7 @@ import java.util.UUID;
 public record SourceResponseDTO(
         UUID id,
         UUID notebookId,
+        UUID groupId,
         String icon,
         String title,
         boolean isConvertedByAi,
@@ -23,6 +24,9 @@ public record SourceResponseDTO(
         this(
                 source.getId(),
                 source.getNotebook().getId(),
+                source.getSourceGroup() != null ?
+                        source.getSourceGroup().getId() :
+                        null,
                 source.getIcon(),
                 source.getTitle(),
                 source.isConvertedByAi(),

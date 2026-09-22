@@ -27,8 +27,12 @@ public class SourceController {
 
     @GetMapping
     public ResponseEntity<List<SourceResponseDTO>> getNotebookSources(
-            @PathVariable UUID notebookId
+            @PathVariable UUID notebookId,
+            @RequestParam(required = false) UUID groupId
     ) {
+        if (groupId != null) {
+            return ResponseEntity.ok(sourceService.getSourcesByGroup(notebookId, groupId));
+        }
         return ResponseEntity.ok(sourceService.getSources(notebookId));
     }
 
@@ -60,7 +64,8 @@ public class SourceController {
             @PathVariable UUID notebookId,
             @RequestParam("file") MultipartFile file,
             @RequestParam("title") String title,
-            @RequestParam(name = "icon", required = false) String icon
+            @RequestParam(name = "icon", required = false) String icon,
+            @RequestParam(name = "groupId", required = false) UUID groupId
     ) {
         if (file.isEmpty()) {
             throw new IllegalArgumentException("File cannot be empty");
@@ -68,7 +73,7 @@ public class SourceController {
         if (title == null || title.trim().isEmpty()) {
             throw new IllegalArgumentException("Title cannot be empty");
         }
-        var sourceFileCreationDTO = new SourceFileCreationDTO(icon, title.trim());
+        var sourceFileCreationDTO = new SourceFileCreationDTO(icon, title.trim(), groupId);
 
         var source = sourceService.addSourceFromFile(notebookId, sourceFileCreationDTO, file);
         return source != null ?

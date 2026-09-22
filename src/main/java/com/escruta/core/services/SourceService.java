@@ -9,10 +9,12 @@ import com.escruta.core.dtos.source.SourceWithContentDTO;
 import com.escruta.core.dtos.tools.JobStartedResponse;
 import com.escruta.core.entities.Notebook;
 import com.escruta.core.entities.Source;
+import com.escruta.core.entities.SourceGroup;
 import com.escruta.core.entities.SourceJob;
 import com.escruta.core.entities.enums.SourceStatus;
 import com.escruta.core.mappers.SourceMapper;
 import com.escruta.core.repositories.NotebookRepository;
+import com.escruta.core.repositories.SourceGroupRepository;
 import com.escruta.core.repositories.SourceRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,6 +35,7 @@ import java.util.UUID;
 public class SourceService {
     private final SourceRepository sourceRepository;
     private final NotebookRepository notebookRepository;
+    private final SourceGroupRepository sourceGroupRepository;
     private final SourceMapper sourceMapper;
     private final HelperService helperService;
     private final SourceJobService sourceJobService;
@@ -45,7 +48,15 @@ public class SourceService {
     }
 
     public List<SourceResponseDTO> getSources(UUID notebookId) {
-        return sourceRepository.findByNotebookId(notebookId);
+        return sourceRepository.findByNotebookId(notebookId).stream().map(SourceResponseDTO::new).toList();
+    }
+
+    public List<SourceResponseDTO> getSourcesByGroup(UUID notebookId, UUID groupId) {
+        return sourceRepository
+                .findByNotebookIdAndSourceGroupId(notebookId, groupId)
+                .stream()
+                .map(SourceResponseDTO::new)
+                .toList();
     }
 
     public SourceWithContentDTO getSource(UUID notebookId, UUID sourceId) {
@@ -67,6 +78,7 @@ public class SourceService {
         Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get(), "");
         source.setTitle(newSourceDto.link());
         source.setStatus(SourceStatus.PENDING);
+        source.setSourceGroup(resolveGroup(notebookId, newSourceDto.groupId()));
         source = sourceRepository.save(source);
         notebookRepository.touchLastActivity(notebookId);
 
@@ -82,6 +94,12 @@ public class SourceService {
         if (notebookOptional.isPresent() && sourceOptional.isPresent()) {
             Source source = sourceOptional.get();
             sourceMapper.updateSourceFromDto(newSource, source);
+            if (Boolean.TRUE.equals(newSource.removeGroup())) {
+                source.setSourceGroup(null);
+            } else if (newSource.groupId() != null) {
+                SourceGroup group = resolveGroup(notebookId, newSource.groupId());
+                source.setSourceGroup(group);
+            }
             sourceRepository.save(source);
             notebookRepository.touchLastActivity(notebookId);
             return new SourceResponseDTO(source);
@@ -125,6 +143,7 @@ public class SourceService {
 
         Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get(), "");
         source.setStatus(SourceStatus.PENDING);
+        source.setSourceGroup(resolveGroup(notebookId, newSourceDto.groupId()));
         source = sourceRepository.save(source);
         notebookRepository.touchLastActivity(notebookId);
 
@@ -156,6 +175,7 @@ public class SourceService {
 
         Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get());
         source.setStatus(SourceStatus.PENDING);
+        source.setSourceGroup(resolveGroup(notebookId, newSourceDto.groupId()));
         source = sourceRepository.save(source);
         notebookRepository.touchLastActivity(notebookId);
 
@@ -218,5 +238,12 @@ public class SourceService {
         sourceRepository.save(source);
         notebookRepository.touchLastActivity(source.getNotebook().getId());
         return true;
+    }
+
+    private SourceGroup resolveGroup(UUID notebookId, UUID groupId) {
+        if (groupId == null) {
+            return null;
+        }
+        return sourceGroupRepository.findByIdAndNotebookId(groupId, notebookId).orElse(null);
     }
 }

@@ -1,6 +1,5 @@
 package com.escruta.core.repositories;
 
-import com.escruta.core.dtos.source.SourceResponseDTO;
 import com.escruta.core.entities.Source;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
@@ -11,7 +10,11 @@ import java.util.UUID;
 
 @Repository
 public interface SourceRepository extends CrudRepository<Source, UUID> {
-    List<SourceResponseDTO> findByNotebookId(UUID notebookId);
+    List<Source> findByNotebookId(UUID notebookId);
+
+    List<Source> findByNotebookIdAndSourceGroupId(UUID notebookId, UUID sourceGroupId);
+
+    List<Source> findBySourceGroupId(UUID sourceGroupId);
 
     boolean existsByNotebookId(UUID notebookId);
 

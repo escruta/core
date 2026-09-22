@@ -8,6 +8,8 @@ public record SourceUpdateDTO(
         @NotNull
         String id,
         String icon,
-        String title
+        String title,
+        java.util.UUID groupId,
+        Boolean removeGroup
 ) {
 }

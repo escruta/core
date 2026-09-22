@@ -43,6 +43,9 @@ public class Notebook {
     private List<Source> sources;
 
     @OneToMany(mappedBy = "notebook", cascade = CascadeType.REMOVE, orphanRemoval = true)
+    private List<SourceGroup> sourceGroups;
+
+    @OneToMany(mappedBy = "notebook", cascade = CascadeType.REMOVE, orphanRemoval = true)
     private List<Note> notes;
 
     @OneToMany(mappedBy = "notebook", cascade = CascadeType.REMOVE, orphanRemoval = true)

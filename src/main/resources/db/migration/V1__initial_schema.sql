@@ -61,6 +61,17 @@ CREATE TABLE generation_jobs
     CONSTRAINT fk_generation_jobs_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id)
 );
 
+CREATE TABLE source_groups
+(
+    created_at  datetime(6),
+    updated_at  datetime(6),
+    id          binary(16)   NOT NULL PRIMARY KEY,
+    notebook_id binary(16)   NOT NULL,
+    title       varchar(255) NOT NULL,
+    color       varchar(50),
+    CONSTRAINT fk_source_groups_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id) ON DELETE CASCADE
+);
+
 CREATE TABLE sources
 (
     is_converted_by_ai boolean      NOT NULL,
@@ -68,6 +79,7 @@ CREATE TABLE sources
     updated_at         datetime(6),
     id                 binary(16)   NOT NULL PRIMARY KEY,
     notebook_id        binary(16)   NOT NULL,
+    source_group_id    binary(16)   NULL,
     content            longtext     NOT NULL,
     icon               varchar(255),
     link               varchar(255),
@@ -77,7 +89,8 @@ CREATE TABLE sources
     type               varchar(255),
     CONSTRAINT sources_status_check CHECK (status IN ('PENDING', 'READY', 'FAILED')),
     CONSTRAINT sources_type_check CHECK (type IN ('WEBSITE', 'YOUTUBE_VIDEO', 'FILE', 'TEXT')),
-    CONSTRAINT fk_sources_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id)
+    CONSTRAINT fk_sources_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id),
+    CONSTRAINT fk_sources_source_groups FOREIGN KEY (source_group_id) REFERENCES source_groups (id) ON DELETE SET NULL
 );
 
 CREATE TABLE notes

@@ -25,6 +25,10 @@ public class Source {
     @JoinColumn(nullable = false)
     private Notebook notebook;
 
+    @ManyToOne
+    @JoinColumn(name = "source_group_id")
+    private SourceGroup sourceGroup;
+
     @Column()
     private String icon;
 
