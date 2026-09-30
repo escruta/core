@@ -1,5 +1,6 @@
 package com.escruta.core.entities;
 
+import com.escruta.core.entities.enums.ChatMode;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -23,6 +24,10 @@ public class Conversation {
 
     @Column(nullable = false)
     private String title;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ChatMode mode = ChatMode.NORMAL;
 
     @CreationTimestamp
     @Column(updatable = false)

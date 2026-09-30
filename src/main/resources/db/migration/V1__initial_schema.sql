@@ -4,7 +4,9 @@ CREATE TABLE conversations
     updated_at  datetime(6),
     notebook_id binary(16)   NOT NULL,
     id          varchar(255) NOT NULL PRIMARY KEY,
-    title       varchar(255) NOT NULL
+    title       varchar(255) NOT NULL,
+    mode        varchar(255) NOT NULL DEFAULT 'NORMAL',
+    CONSTRAINT conversations_mode_check CHECK (mode IN ('NORMAL', 'LEARNING'))
 );
 
 CREATE TABLE users

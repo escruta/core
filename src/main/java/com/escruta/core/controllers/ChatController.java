@@ -7,6 +7,7 @@ import com.escruta.core.dtos.SummaryResponse;
 import com.escruta.core.dtos.tools.JobStartedResponse;
 import com.escruta.core.entities.Conversation;
 import com.escruta.core.entities.Notebook;
+import com.escruta.core.entities.enums.ChatMode;
 import com.escruta.core.repositories.ConversationRepository;
 import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.services.SourceService;
@@ -57,6 +58,28 @@ public class ChatController {
                - NEVER use parentheses like (\\alpha) or (|0\\rangle)
             """;
 
+    private static final String LEARNING_SYSTEM_MESSAGE = """
+            You are an expert tutor guiding a student to truly understand the subject. Answer using ONLY the provided sources.
+            
+            TEACHING APPROACH (Socratic method):
+            1. Do NOT simply give the final answer. Guide the student to it by breaking the reasoning into clear, small steps.
+            2. Connect new ideas to what the student already knows, and explain the "why" behind each step.
+            3. After explaining a key idea, ask ONE short comprehension question to check understanding and invite the student to think or answer before continuing.
+            4. When the student is wrong or unsure, correct gently, explain the misconception, and offer a hint before revealing the full answer.
+            5. Use concrete examples, analogies, and simple language appropriate for learning.
+            6. Keep an encouraging, patient tone and celebrate the student's progress.
+            
+            RULES:
+            1. Base every explanation on the available sources and stay accurate
+            2. Write in a natural, conversational tone
+            3. Use simple formatting only: **bold**, *italic*, `code`
+            4. ALWAYS cite the sources directly in your response text. When using information from a source, add an inline citation using the exact format: [source_sourceId] where sourceId is the ID of the document you are referencing. For example: [source_123e4567-e89b-12d3-a456-426614174000]. Never use formats like [1] or [2]. Do not repeat the same citation consecutively.
+            5. For mathematical expressions, ALWAYS use LaTeX format with dollar signs:
+               - Inline math: $...$ (e.g., $\\alpha$, $|0\\rangle$, $\\psi$)
+               - Block math: $$...$$ (e.g., $$|\\psi\\rangle = \\alpha|0\\rangle + \\beta|1\\rangle$$)
+               - NEVER use parentheses like (\\alpha) or (|0\\rangle)
+            """;
+
     private final SourceService sourceService;
     private final RetrievalService retrievalService;
     private final ChatModel chatModel;
@@ -65,6 +88,18 @@ public class ChatController {
     private final JpaChatMemory chatMemory;
     private final ChatMessageService chatMessageService;
     private final SourceJobService sourceJobService;
+
+    private static String systemMessageFor(ChatMode mode) {
+        return mode == ChatMode.LEARNING ?
+                LEARNING_SYSTEM_MESSAGE :
+                UNIFIED_SYSTEM_MESSAGE;
+    }
+
+    private static ChatMode resolveMode(@Nullable ChatMode mode) {
+        return mode != null ?
+                mode :
+                ChatMode.NORMAL;
+    }
 
     private Optional<String> getNotebookContext(UUID notebookId, int documentLimit) {
         if (sourceService.hasNoSources(notebookId)) {
@@ -193,7 +228,9 @@ public class ChatController {
             return ResponseEntity.notFound().build();
         }
 
-        var chatClient = ChatClient.builder(chatModel).defaultSystem(UNIFIED_SYSTEM_MESSAGE).defaultAdvisors(
+        ChatMode mode = resolveMode(request.mode());
+
+        var chatClient = ChatClient.builder(chatModel).defaultSystem(systemMessageFor(mode)).defaultAdvisors(
                 MessageChatMemoryAdvisor.builder(chatMemory).build(),
                 retrievalService.getQuestionAnswerAdvisor(notebookId, request.selectedSourceIds())
         ).build();
@@ -241,6 +278,7 @@ public class ChatController {
             }
             conversation.setTitle(title.trim());
         }
+        conversation.setMode(mode);
         conversationRepository.save(conversation);
         notebookRepository.touchLastActivity(conversation.getNotebook().getId());
 
@@ -284,7 +322,9 @@ public class ChatController {
 
         SseEmitter emitter = new SseEmitter(300_000L);
 
-        var chatClient = ChatClient.builder(chatModel).defaultSystem(UNIFIED_SYSTEM_MESSAGE).defaultAdvisors(
+        ChatMode mode = resolveMode(request.mode());
+
+        var chatClient = ChatClient.builder(chatModel).defaultSystem(systemMessageFor(mode)).defaultAdvisors(
                 MessageChatMemoryAdvisor.builder(chatMemory).build(),
                 retrievalService.getQuestionAnswerAdvisor(notebookId, request.selectedSourceIds())
         ).build();
@@ -343,7 +383,8 @@ public class ChatController {
                         existingConversation,
                         retrievedDocumentsRef.get(),
                         accumulatedText.get(),
-                        request.selectedSourceIds()
+                        request.selectedSourceIds(),
+                        mode
                 )))
                 .subscribe();
 
@@ -371,7 +412,8 @@ public class ChatController {
             @Nullable Conversation existingConversation,
             List<Document> retrievedDocuments,
             String assistantContent,
-            List<UUID> selectedSourceIds
+            List<UUID> selectedSourceIds,
+            ChatMode mode
     ) {
         try {
             Conversation conversation = isNewConversation ?
@@ -385,6 +427,7 @@ public class ChatController {
                 conversation.setTitle(title);
             }
             assert conversation != null;
+            conversation.setMode(mode);
             conversationRepository.save(conversation);
             notebookRepository.touchLastActivity(notebook.getId());
 

@@ -47,7 +47,13 @@ class ConversationController {
 
         var response = conversations
                 .stream()
-                .map(c -> new ConversationResponse(c.getId(), c.getTitle(), c.getCreatedAt(), c.getUpdatedAt()))
+                .map(c -> new ConversationResponse(
+                        c.getId(),
+                        c.getTitle(),
+                        c.getMode(),
+                        c.getCreatedAt(),
+                        c.getUpdatedAt()
+                ))
                 .toList();
 
         boolean hasMore = (offset + conversations.size()) < total;
@@ -78,7 +84,11 @@ class ConversationController {
                 ))
                 .toList();
 
-        return ResponseEntity.ok(new ConversationMessagesResponse(conversationId, messageResponses));
+        return ResponseEntity.ok(new ConversationMessagesResponse(
+                conversationId,
+                conversation.getMode(),
+                messageResponses
+        ));
     }
 
     @DeleteMapping("/{conversationId}")
