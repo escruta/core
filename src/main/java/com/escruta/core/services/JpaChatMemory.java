@@ -16,16 +16,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * {@link ChatMemory} backed by the application's {@code messages} table.
- *
- * <p>It provides a sliding window of the most recent messages for LLM context
- * ({@link #get(String)}) while the full conversation history is persisted by
- * {@link ChatController} through {@link ChatMessageService}. The {@link #add}
- * method is intentionally a no-op: messages are stored explicitly by the
- * controller alongside their metadata (cited sources and selected sources),
- * which the memory advisor cannot convey.
- */
 @Component
 @RequiredArgsConstructor
 public class JpaChatMemory implements ChatMemory {
@@ -35,7 +25,6 @@ public class JpaChatMemory implements ChatMemory {
 
     @Override
     public void add(@NonNull String conversationId, @NonNull List<Message> messages) {
-        // No-op: messages are persisted by ChatController via ChatMessageService.
     }
 
     @Override

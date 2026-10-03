@@ -75,7 +75,6 @@ public class GenerationJob {
     }
 
     public enum JobType {
-        // AUDIO_SUMMARY,
         MIND_MAP,
         STUDY_GUIDE,
         FLASHCARDS,
