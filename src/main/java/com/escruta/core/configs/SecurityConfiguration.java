@@ -99,6 +99,7 @@ public class SecurityConfiguration {
             Map<String, Object> attributes = new HashMap<>();
             attributes.put("sub", accessToken.getUserId().toString());
             attributes.put("active", true);
+            attributes.put("sessionId", accessToken.getSessionId());
 
             return new DefaultOAuth2AuthenticatedPrincipal(
                     accessToken.getUserId().toString(),

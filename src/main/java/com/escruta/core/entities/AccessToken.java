@@ -17,7 +17,16 @@ public class AccessToken {
     @Indexed
     private java.util.UUID userId;
 
+    @Indexed
+    private String sessionId;
+
+    private java.time.Instant createdAt;
+
     private java.time.Instant expiresAt;
+
+    private String userAgent;
+
+    private String ipAddress;
 
     @TimeToLive
     private Long timeToLive;
