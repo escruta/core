@@ -32,8 +32,8 @@ public interface NotebookRepository extends JpaRepository<Notebook, UUID> {
 
     @Transactional
     @Modifying
-    @Query("UPDATE Notebook n SET n.summary = :summary WHERE n.id = :notebookId")
-    void updateSummary(UUID notebookId, String summary);
+    @Query("UPDATE Notebook n SET n.summary = :summary, n.summaryTopics = :summaryTopics WHERE n.id = :notebookId")
+    void updateSummary(UUID notebookId, String summary, String summaryTopics);
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     @Modifying

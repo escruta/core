@@ -39,6 +39,9 @@ public class Notebook {
     @Column(columnDefinition = "TEXT")
     private String summary;
 
+    @Column(columnDefinition = "TEXT")
+    private String summaryTopics;
+
     @OneToMany(mappedBy = "notebook", cascade = CascadeType.REMOVE, orphanRemoval = true)
     private List<Source> sources;
 

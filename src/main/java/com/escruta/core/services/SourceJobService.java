@@ -1,6 +1,7 @@
 package com.escruta.core.services;
 
 import com.escruta.core.dtos.ExtractorResponse;
+import com.escruta.core.dtos.NotebookSummaryDTO;
 import com.escruta.core.dtos.SummaryResponse;
 import com.escruta.core.entities.Notebook;
 import com.escruta.core.entities.Source;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -50,6 +52,7 @@ public class SourceJobService {
     private final SseNotificationService sseNotificationService;
     private final Executor taskExecutor;
     private final PlatformTransactionManager transactionManager;
+    private final ObjectMapper objectMapper;
     private TransactionTemplate transactionTemplate;
 
     @PostConstruct
@@ -83,6 +86,14 @@ public class SourceJobService {
             - Do NOT start with phrases like "The articles...", "The sources...", "This content..." or similar
             - Start directly with the core subject matter (e.g., "Quantum computing is a field that...")
             - Ensure the summary provides a cohesive understanding of how the various pieces of information relate to each other
+            """;
+
+    private static final String NOTEBOOK_SUMMARY_TOPICS_SYSTEM_PROMPT = NOTEBOOK_SUMMARY_SYSTEM_PROMPT + """
+            
+            - Additionally, extract a list of 5 to 8 "topics": short labels (1-3 words) naming the most important concepts, themes or entities covered
+            - Each topic must be a concise noun phrase, not a full sentence
+            - Do NOT repeat the summary text as a topic, and do NOT use generic words like "introduction" or "overview"
+            - Order topics from most to least important
             """;
 
     @Transactional
@@ -180,7 +191,7 @@ public class SourceJobService {
     }
 
     private void recordExtractFailure(SourceJob job, String errorMessage) {
-        transactionTemplate.executeWithoutResult(status -> {
+        transactionTemplate.executeWithoutResult(_ -> {
             job.markAsFailed(errorMessage);
             jobRepository.save(job);
 
@@ -289,9 +300,18 @@ public class SourceJobService {
                 throw new IllegalStateException("No content available");
             }
 
-            String summary = summarizeNotebook(context);
-            notebookRepository.updateSummary(notebookId, summary);
-            job.setResult(summary);
+            NotebookSummaryDTO summary = summarizeNotebook(context);
+            String summaryText = summary != null ?
+                    summary.summary() :
+                    null;
+            notebookRepository.updateSummary(
+                    notebookId,
+                    summaryText,
+                    summary != null ?
+                            toJson(summary.topics()) :
+                            null
+            );
+            job.setResult(summaryText);
 
             return notebookRepository.findOwnerId(notebookId);
         } else {
@@ -322,7 +342,7 @@ public class SourceJobService {
         return Objects.requireNonNull(chatModel.call(prompt).getResult()).getOutput().getText();
     }
 
-    private String summarizeNotebook(String context) {
+    private NotebookSummaryDTO summarizeNotebook(String context) {
         String promptUser = "Analyze the following materials and write a high-level summary that captures the central theme and core concepts of this subject matter:\n\n";
         String promptUserFinal = "Analyze the following materials (which are partial summaries) and write a single, cohesive high-level summary that captures the central theme and core concepts of the entire subject matter:\n\n";
 
@@ -345,28 +365,34 @@ public class SourceJobService {
                 start = end;
             }
 
-            SummaryResponse finalSummary = ChatClient
+            return ChatClient
                     .create(chatModel)
                     .prompt()
-                    .system(NOTEBOOK_SUMMARY_SYSTEM_PROMPT)
+                    .system(NOTEBOOK_SUMMARY_TOPICS_SYSTEM_PROMPT)
                     .user(promptUserFinal + intermediateSummaries)
                     .call()
-                    .entity(SummaryResponse.class);
-            return finalSummary != null ?
-                    finalSummary.summary() :
-                    null;
+                    .entity(NotebookSummaryDTO.class);
         }
 
-        SummaryResponse summary = ChatClient
+        return ChatClient
                 .create(chatModel)
                 .prompt()
-                .system(NOTEBOOK_SUMMARY_SYSTEM_PROMPT)
+                .system(NOTEBOOK_SUMMARY_TOPICS_SYSTEM_PROMPT)
                 .user(promptUser + context)
                 .call()
-                .entity(SummaryResponse.class);
-        return summary != null ?
-                summary.summary() :
-                null;
+                .entity(NotebookSummaryDTO.class);
+    }
+
+    private String toJson(List<String> topics) {
+        if (topics == null || topics.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(topics);
+        } catch (Exception e) {
+            log.error("Error serializing notebook summary topics", e);
+            return null;
+        }
     }
 
     private void publishCompletion(SourceJob job, UUID ownerId) {

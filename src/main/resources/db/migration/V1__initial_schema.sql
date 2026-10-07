@@ -40,6 +40,7 @@ CREATE TABLE notebooks
     folder_id        binary(16)   NULL,
     icon             varchar(255),
     summary          text,
+    summary_topics   text,
     title            varchar(255) NOT NULL,
     CONSTRAINT fk_notebooks_users FOREIGN KEY (user_id) REFERENCES users (id),
     CONSTRAINT fk_notebooks_folders FOREIGN KEY (folder_id) REFERENCES folders (id) ON DELETE SET NULL

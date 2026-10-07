@@ -3,7 +3,7 @@ package com.escruta.core.controllers;
 import com.escruta.core.dtos.ChatRequest;
 import com.escruta.core.dtos.ChatReplyMessage;
 import com.escruta.core.dtos.ExampleQuestions;
-import com.escruta.core.dtos.SummaryResponse;
+import com.escruta.core.dtos.NotebookSummaryDTO;
 import com.escruta.core.dtos.tools.JobStartedResponse;
 import com.escruta.core.entities.Conversation;
 import com.escruta.core.entities.Notebook;
@@ -16,6 +16,7 @@ import com.escruta.core.services.ChatMessageService;
 import com.escruta.core.services.JpaChatMemory;
 import com.escruta.core.services.SourceJobService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import com.escruta.core.services.CustomQuestionAnswerAdvisor;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
@@ -38,11 +39,17 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
 import reactor.core.Disposable;
 import reactor.core.scheduler.Schedulers;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 @RestController
 @RequestMapping("notebooks/{notebookId}")
 @RequiredArgsConstructor
+@Slf4j
 public class ChatController {
+    private static final TypeReference<List<String>> STRING_LIST = new TypeReference<>() {
+    };
+
     private static final String UNIFIED_SYSTEM_MESSAGE = """
             You are a helpful AI assistant. Answer questions using ONLY the provided sources.
             
@@ -88,6 +95,7 @@ public class ChatController {
     private final JpaChatMemory chatMemory;
     private final ChatMessageService chatMessageService;
     private final SourceJobService sourceJobService;
+    private final ObjectMapper objectMapper;
 
     private static String systemMessageFor(ChatMode mode) {
         return mode == ChatMode.LEARNING ?
@@ -131,7 +139,7 @@ public class ChatController {
             return ResponseEntity.notFound().build();
         }
 
-        notebookRepository.updateSummary(notebookId, null);
+        notebookRepository.updateSummary(notebookId, null, null);
 
         var job = sourceJobService.startNotebookSummaryJob(notebook);
         return ResponseEntity
@@ -142,8 +150,20 @@ public class ChatController {
                 ));
     }
 
+    private List<String> deserializeTopics(String topicsJson) {
+        if (topicsJson == null || topicsJson.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(topicsJson, STRING_LIST);
+        } catch (Exception e) {
+            log.error("Error deserializing notebook summary topics", e);
+            return List.of();
+        }
+    }
+
     @GetMapping("summary")
-    ResponseEntity<SummaryResponse> getSummary(@PathVariable UUID notebookId) {
+    ResponseEntity<NotebookSummaryDTO> getSummary(@PathVariable UUID notebookId) {
         var notebook = notebookRepository.findById(notebookId).orElse(null);
 
         if (notebook == null) {
@@ -152,10 +172,10 @@ public class ChatController {
 
         String summary = notebook.getSummary();
         if (summary == null || summary.trim().isEmpty()) {
-            return ResponseEntity.ok(new SummaryResponse(""));
+            return ResponseEntity.ok(new NotebookSummaryDTO("", List.of()));
         }
 
-        return ResponseEntity.ok(new SummaryResponse(summary));
+        return ResponseEntity.ok(new NotebookSummaryDTO(summary, deserializeTopics(notebook.getSummaryTopics())));
     }
 
     @DeleteMapping("summary")
@@ -166,7 +186,7 @@ public class ChatController {
             return ResponseEntity.notFound().build();
         }
 
-        notebookRepository.updateSummary(notebookId, null);
+        notebookRepository.updateSummary(notebookId, null, null);
         return ResponseEntity.noContent().build();
     }
 
