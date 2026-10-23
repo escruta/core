@@ -27,13 +27,7 @@ public class ChatMessageService {
     private final ObjectMapper objectMapper;
 
     @Transactional
-    public void saveConversationTurn(
-            Conversation conversation,
-            String userContent,
-            List<UUID> selectedSourceIds,
-            String assistantContent,
-            List<ChatReplyMessage.CitedSource> citedSources
-    ) {
+    public void saveUserMessage(Conversation conversation, String userContent, List<UUID> selectedSourceIds) {
         ChatMessage userMessage = new ChatMessage();
         userMessage.setConversation(conversation);
         userMessage.setRole("USER");
@@ -41,15 +35,33 @@ public class ChatMessageService {
         userMessage.setSelectedSourceIds(toJson(selectedSourceIds == null ?
                 null :
                 selectedSourceIds.stream().map(UUID::toString).toList()));
+        chatMessageRepository.save(userMessage);
+    }
 
+    @Transactional
+    public void saveAssistantMessage(
+            Conversation conversation,
+            String assistantContent,
+            List<ChatReplyMessage.CitedSource> citedSources
+    ) {
         ChatMessage assistantMessage = new ChatMessage();
         assistantMessage.setConversation(conversation);
         assistantMessage.setRole("ASSISTANT");
         assistantMessage.setContent(assistantContent);
         assistantMessage.setCitedSources(toJson(citedSources));
-
-        chatMessageRepository.save(userMessage);
         chatMessageRepository.save(assistantMessage);
+    }
+
+    @Transactional
+    public void saveConversationTurn(
+            Conversation conversation,
+            String userContent,
+            List<UUID> selectedSourceIds,
+            String assistantContent,
+            List<ChatReplyMessage.CitedSource> citedSources
+    ) {
+        saveUserMessage(conversation, userContent, selectedSourceIds);
+        saveAssistantMessage(conversation, assistantContent, citedSources);
     }
 
     @Transactional(readOnly = true)

@@ -8,6 +8,7 @@ import com.escruta.core.dtos.tools.JobStartedResponse;
 import com.escruta.core.entities.Conversation;
 import com.escruta.core.entities.Notebook;
 import com.escruta.core.entities.enums.ChatMode;
+import com.escruta.core.entities.enums.ConversationStatus;
 import com.escruta.core.repositories.ConversationRepository;
 import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.services.SourceService;
@@ -15,6 +16,7 @@ import com.escruta.core.services.RetrievalService;
 import com.escruta.core.services.ChatMessageService;
 import com.escruta.core.services.JpaChatMemory;
 import com.escruta.core.services.SourceJobService;
+import com.escruta.core.services.SseNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -34,10 +36,10 @@ import jakarta.validation.Valid;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jspecify.annotations.Nullable;
-import reactor.core.Disposable;
 import reactor.core.scheduler.Schedulers;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -95,6 +97,7 @@ public class ChatController {
     private final JpaChatMemory chatMemory;
     private final ChatMessageService chatMessageService;
     private final SourceJobService sourceJobService;
+    private final SseNotificationService sseNotificationService;
     private final ObjectMapper objectMapper;
 
     private static String systemMessageFor(ChatMode mode) {
@@ -340,14 +343,21 @@ public class ChatController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Notebook not found");
         }
 
+        UUID ownerId = notebookRepository.findOwnerId(notebookId);
         SseEmitter emitter = new SseEmitter(300_000L);
+        AtomicBoolean emitterActive = new AtomicBoolean(true);
+
+        emitter.onCompletion(() -> emitterActive.set(false));
+        emitter.onTimeout(() -> {
+            emitterActive.set(false);
+            try {
+                emitter.complete();
+            } catch (IllegalStateException ignored) {
+            }
+        });
+        emitter.onError(_ -> emitterActive.set(false));
 
         ChatMode mode = resolveMode(request.mode());
-
-        var chatClient = ChatClient.builder(chatModel).defaultSystem(systemMessageFor(mode)).defaultAdvisors(
-                MessageChatMemoryAdvisor.builder(chatMemory).build(),
-                retrievalService.getQuestionAnswerAdvisor(notebookId, request.selectedSourceIds())
-        ).build();
 
         String conversationId = request.conversationId() != null ?
                 request.conversationId() :
@@ -356,22 +366,46 @@ public class ChatController {
         Conversation existingConversation = conversationRepository.findById(conversationId).orElse(null);
         boolean isNewConversation = existingConversation == null;
 
-        try {
-            emitter.send(SseEmitter.event().name("conversation").data(Map.of("conversationId", conversationId)));
-        } catch (IOException e) {
-            emitter.completeWithError(e);
-            return emitter;
-        }
+        var chatClient = ChatClient.builder(chatModel).defaultSystem(systemMessageFor(mode)).defaultAdvisors(
+                MessageChatMemoryAdvisor.builder(chatMemory).build(),
+                retrievalService.getQuestionAnswerAdvisor(notebookId, request.selectedSourceIds())
+        ).build();
 
-        AtomicReference<List<Document>> retrievedDocumentsRef = new AtomicReference<>(List.of());
-        AtomicReference<String> accumulatedText = new AtomicReference<>("");
-
-        Disposable subscription = chatClient
+        var streamResponse = chatClient
                 .prompt()
                 .advisors(advisorSpec -> advisorSpec.param(ChatMemory.CONVERSATION_ID, conversationId))
                 .user(request.userInput())
                 .stream()
-                .chatResponse()
+                .chatResponse();
+
+        Conversation conversation = isNewConversation ?
+                new Conversation() :
+                existingConversation;
+        if (isNewConversation) {
+            conversation.setId(conversationId);
+            conversation.setNotebook(notebook);
+            conversation.setTitle(normalizeTitle(null, request.userInput()));
+        }
+        conversation.setMode(mode);
+        conversation.setStatus(ConversationStatus.GENERATING);
+        conversation.setHasUnseenReply(false);
+        conversation = conversationRepository.save(conversation);
+        notebookRepository.touchLastActivity(notebook.getId());
+
+        chatMessageService.saveUserMessage(conversation, request.userInput(), request.selectedSourceIds());
+
+        publishConversationUpdated(ownerId, conversation);
+
+        trySendEvent(
+                emitter,
+                emitterActive,
+                SseEmitter.event().name("conversation").data(Map.of("conversationId", conversationId))
+        );
+
+        AtomicReference<List<Document>> retrievedDocumentsRef = new AtomicReference<>(List.of());
+        AtomicReference<String> accumulatedText = new AtomicReference<>("");
+
+        streamResponse
                 .doOnNext(chatResponse -> {
                     Object docs = chatResponse.getMetadata().get(CustomQuestionAnswerAdvisor.RETRIEVED_DOCUMENTS);
                     if (docs instanceof List<?> list && !list.isEmpty() && retrievedDocumentsRef.get().isEmpty()) {
@@ -380,40 +414,36 @@ public class ChatController {
 
                     if (chatResponse.getResult() == null) {
                         return;
-                    } else {
-                        chatResponse.getResult();
                     }
                     String chunk = chatResponse.getResult().getOutput().getText();
                     if (chunk != null && !chunk.isEmpty()) {
                         accumulatedText.accumulateAndGet(chunk, String::concat);
-                        try {
-                            emitter.send(SseEmitter.event().name("token").data(chunk));
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
+                        trySendEvent(emitter, emitterActive, SseEmitter.event().name("token").data(chunk));
                     }
                 })
-                .doOnError(error -> sendErrorAndComplete(emitter, error))
+                .doOnError(error -> Schedulers
+                        .boundedElastic()
+                        .schedule(() -> handleStreamError(
+                                emitter,
+                                emitterActive,
+                                ownerId,
+                                notebook,
+                                conversationId,
+                                error
+                        )))
                 .doOnComplete(() -> Schedulers.boundedElastic().schedule(() -> finalizeStream(
                         emitter,
+                        emitterActive,
+                        ownerId,
                         notebook,
                         request.userInput(),
                         conversationId,
                         isNewConversation,
-                        existingConversation,
                         retrievedDocumentsRef.get(),
                         accumulatedText.get(),
-                        request.selectedSourceIds(),
                         mode
                 )))
                 .subscribe();
-
-        emitter.onCompletion(subscription::dispose);
-        emitter.onTimeout(() -> {
-            subscription.dispose();
-            emitter.complete();
-        });
-        emitter.onError(_ -> subscription.dispose());
 
         return emitter;
     }
@@ -425,30 +455,30 @@ public class ChatController {
 
     private void finalizeStream(
             SseEmitter emitter,
+            AtomicBoolean emitterActive,
+            @Nullable UUID ownerId,
             Notebook notebook,
             String userInput,
             String conversationId,
             boolean isNewConversation,
-            @Nullable Conversation existingConversation,
             List<Document> retrievedDocuments,
             String assistantContent,
-            List<UUID> selectedSourceIds,
             ChatMode mode
     ) {
         try {
-            Conversation conversation = isNewConversation ?
-                    new Conversation() :
-                    existingConversation;
+            Conversation conversation = conversationRepository.findById(conversationId).orElse(null);
+            if (conversation == null) {
+                return;
+            }
             if (isNewConversation) {
-                conversation.setId(conversationId);
-                conversation.setNotebook(notebook);
                 String title = generateTitle(userInput);
                 title = normalizeTitle(title, userInput);
                 conversation.setTitle(title);
             }
-            assert conversation != null;
             conversation.setMode(mode);
-            conversationRepository.save(conversation);
+            conversation.setStatus(ConversationStatus.IDLE);
+            conversation.setHasUnseenReply(!emitterActive.get());
+            conversation = conversationRepository.save(conversation);
             notebookRepository.touchLastActivity(notebook.getId());
 
             List<ChatReplyMessage.CitedSource> citedSources = retrievedDocuments
@@ -461,27 +491,95 @@ public class ChatController {
                     ))
                     .toList();
 
-            chatMessageService.saveConversationTurn(
-                    conversation,
-                    userInput,
-                    selectedSourceIds,
-                    assistantContent,
-                    citedSources
-            );
+            chatMessageService.saveAssistantMessage(conversation, assistantContent, citedSources);
 
-            emitter.send(SseEmitter.event().name("sources").data(citedSources));
+            trySendEvent(emitter, emitterActive, SseEmitter.event().name("sources").data(citedSources));
             if (isNewConversation) {
-                emitter.send(SseEmitter.event().name("title").data(conversation.getTitle()));
+                trySendEvent(emitter, emitterActive, SseEmitter.event().name("title").data(conversation.getTitle()));
             }
-            emitter.send(SseEmitter.event().name("done").data(""));
-            emitter.complete();
+            boolean sentDone = trySendEvent(emitter, emitterActive, SseEmitter.event().name("done").data(""));
+            if (!sentDone && !conversation.isHasUnseenReply()) {
+                conversation.setHasUnseenReply(true);
+                conversation = conversationRepository.save(conversation);
+            }
+            tryComplete(emitter, emitterActive);
+
+            publishConversationUpdated(ownerId, conversation);
         } catch (Exception e) {
-            try {
-                emitter.send(SseEmitter.event().name("error").data("Internal error occurred"));
-                emitter.complete();
-            } catch (IOException ignored) {
-                emitter.completeWithError(e);
+            log.error("Error finalizing chat stream for conversation {}", conversationId, e);
+            handleStreamError(emitter, emitterActive, ownerId, notebook, conversationId, e);
+        }
+    }
+
+    private void handleStreamError(
+            SseEmitter emitter,
+            AtomicBoolean emitterActive,
+            @Nullable UUID ownerId,
+            Notebook notebook,
+            String conversationId,
+            Throwable error
+    ) {
+        try {
+            Conversation conversation = conversationRepository.findById(conversationId).orElse(null);
+            if (conversation != null) {
+                conversation.setStatus(ConversationStatus.FAILED);
+                conversation.setHasUnseenReply(false);
+                conversation = conversationRepository.save(conversation);
+                notebookRepository.touchLastActivity(notebook.getId());
+                publishConversationUpdated(ownerId, conversation);
             }
+        } catch (Exception e) {
+            log.warn("Could not record failure for conversation {}: {}", conversationId, e.getMessage());
+        }
+        sendErrorAndComplete(emitter, emitterActive, error);
+    }
+
+    private void publishConversationUpdated(@Nullable UUID ownerId, Conversation conversation) {
+        if (ownerId == null) {
+            return;
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("notebookId", conversation.getNotebook().getId().toString());
+        payload.put("conversationId", conversation.getId());
+        payload.put("title", conversation.getTitle());
+        payload.put("mode", conversation.getMode().toString());
+        payload.put("status", conversation.getStatus().toString());
+        payload.put("hasUnseenReply", conversation.isHasUnseenReply());
+        payload.put(
+                "createdAt",
+                conversation.getCreatedAt() != null ?
+                        conversation.getCreatedAt().toInstant().toString() :
+                        null
+        );
+        payload.put(
+                "updatedAt",
+                conversation.getUpdatedAt() != null ?
+                        conversation.getUpdatedAt().toInstant().toString() :
+                        null
+        );
+        sseNotificationService.publish(ownerId, "conversation.updated", payload);
+    }
+
+    private boolean trySendEvent(SseEmitter emitter, AtomicBoolean emitterActive, SseEmitter.SseEventBuilder event) {
+        if (!emitterActive.get()) {
+            return false;
+        }
+        try {
+            emitter.send(event);
+            return true;
+        } catch (IOException | IllegalStateException e) {
+            emitterActive.set(false);
+            return false;
+        }
+    }
+
+    private void tryComplete(SseEmitter emitter, AtomicBoolean emitterActive) {
+        if (!emitterActive.getAndSet(false)) {
+            return;
+        }
+        try {
+            emitter.complete();
+        } catch (IllegalStateException ignored) {
         }
     }
 
@@ -511,15 +609,11 @@ public class ChatController {
         return title.trim();
     }
 
-    private void sendErrorAndComplete(SseEmitter emitter, Throwable error) {
+    private void sendErrorAndComplete(SseEmitter emitter, AtomicBoolean emitterActive, Throwable error) {
         String message = error.getMessage() != null ?
                 error.getMessage() :
                 "Error generating response";
-        try {
-            emitter.send(SseEmitter.event().name("error").data(message));
-            emitter.complete();
-        } catch (IOException ignored) {
-            emitter.completeWithError(error);
-        }
+        trySendEvent(emitter, emitterActive, SseEmitter.event().name("error").data(message));
+        tryComplete(emitter, emitterActive);
     }
 }

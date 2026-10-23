@@ -1,12 +1,15 @@
 CREATE TABLE conversations
 (
-    created_at  datetime(6),
-    updated_at  datetime(6),
-    notebook_id binary(16)   NOT NULL,
-    id          varchar(255) NOT NULL PRIMARY KEY,
-    title       varchar(255) NOT NULL,
-    mode        varchar(255) NOT NULL DEFAULT 'NORMAL',
-    CONSTRAINT conversations_mode_check CHECK (mode IN ('NORMAL', 'LEARNING'))
+    created_at       datetime(6),
+    updated_at       datetime(6),
+    notebook_id      binary(16)   NOT NULL,
+    id               varchar(255) NOT NULL PRIMARY KEY,
+    title            varchar(255) NOT NULL,
+    mode             varchar(255) NOT NULL DEFAULT 'NORMAL',
+    status           varchar(255) NOT NULL DEFAULT 'IDLE',
+    has_unseen_reply boolean      NOT NULL DEFAULT false,
+    CONSTRAINT conversations_mode_check CHECK (mode IN ('NORMAL', 'LEARNING')),
+    CONSTRAINT conversations_status_check CHECK (status IN ('IDLE', 'GENERATING', 'FAILED'))
 );
 
 CREATE TABLE users

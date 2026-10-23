@@ -45,16 +45,15 @@ class ConversationController {
             total = conversationRepository.countByNotebookId(notebookId);
         }
 
-        var response = conversations
-                .stream()
-                .map(c -> new ConversationResponse(
-                        c.getId(),
-                        c.getTitle(),
-                        c.getMode(),
-                        c.getCreatedAt(),
-                        c.getUpdatedAt()
-                ))
-                .toList();
+        var response = conversations.stream().map(c -> new ConversationResponse(
+                c.getId(),
+                c.getTitle(),
+                c.getMode(),
+                c.getStatus(),
+                c.isHasUnseenReply(),
+                c.getCreatedAt(),
+                c.getUpdatedAt()
+        )).toList();
 
         boolean hasMore = (offset + conversations.size()) < total;
 
@@ -87,8 +86,26 @@ class ConversationController {
         return ResponseEntity.ok(new ConversationMessagesResponse(
                 conversationId,
                 conversation.getMode(),
+                conversation.getStatus(),
+                conversation.isHasUnseenReply(),
                 messageResponses
         ));
+    }
+
+    @PatchMapping("/{conversationId}/seen")
+    ResponseEntity<Void> markConversationAsSeen(@PathVariable UUID notebookId, @PathVariable String conversationId) {
+        var conversation = conversationRepository.findById(conversationId).orElse(null);
+
+        if (conversation == null || !conversation.getNotebook().getId().equals(notebookId)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        if (conversation.isHasUnseenReply()) {
+            conversation.setHasUnseenReply(false);
+            conversationRepository.save(conversation);
+        }
+
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/{conversationId}")
