@@ -52,6 +52,8 @@ public class ChatController {
     private static final TypeReference<List<String>> STRING_LIST = new TypeReference<>() {
     };
 
+    private static final int EXAMPLE_QUESTIONS_DOCUMENT_LIMIT = 15;
+
     private static final String UNIFIED_SYSTEM_MESSAGE = """
             You are a helpful AI assistant. Answer questions using ONLY the provided sources.
             
@@ -112,13 +114,13 @@ public class ChatController {
                 ChatMode.NORMAL;
     }
 
-    private Optional<String> getNotebookContext(UUID notebookId, int documentLimit) {
+    private Optional<String> getNotebookContext(UUID notebookId) {
         if (sourceService.hasNoSources(notebookId)) {
             return Optional.empty();
         }
 
         String query = "core concepts key ideas summary main topic definitions overview";
-        var documents = retrievalService.getDocumentsForNotebook(notebookId, query, documentLimit);
+        var documents = retrievalService.getDocumentsForNotebook(notebookId, query, EXAMPLE_QUESTIONS_DOCUMENT_LIMIT);
         if (documents.isEmpty()) {
             return Optional.empty();
         }
@@ -195,7 +197,7 @@ public class ChatController {
 
     @GetMapping("example-questions")
     public ResponseEntity<ExampleQuestions> getExampleQuestions(@PathVariable UUID notebookId) {
-        Optional<String> context = getNotebookContext(notebookId, 15);
+        Optional<String> context = getNotebookContext(notebookId);
 
         if (context.isEmpty()) {
             return ResponseEntity.ok(new ExampleQuestions(List.of()));
