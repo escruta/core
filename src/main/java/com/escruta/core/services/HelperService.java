@@ -131,18 +131,56 @@ public class HelperService {
 
     private static final Set<String> SUPPORTED_TYPES = Set.of(
             "application/pdf",
+            "application/x-pdf",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/msword",
             "text/plain",
             "text/markdown",
+            "text/x-markdown",
+            "text/csv",
+            "text/html",
             "audio/mpeg",
+            "audio/mp3",
             "audio/wav",
+            "audio/x-wav",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/vnd.ms-excel",
             "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             "application/vnd.ms-powerpoint"
     );
 
-    public boolean isSupportedFileType(String contentType) {
-        return contentType != null && SUPPORTED_TYPES.contains(contentType);
+    private static final Set<String> SUPPORTED_EXTENSIONS = Set.of(
+            ".pdf",
+            ".doc",
+            ".docx",
+            ".txt",
+            ".md",
+            ".markdown",
+            ".csv",
+            ".html",
+            ".htm",
+            ".mp3",
+            ".wav",
+            ".xls",
+            ".xlsx",
+            ".ppt",
+            ".pptx"
+    );
+
+    public boolean isSupportedFileType(String contentType, String filename) {
+        if (contentType != null) {
+            String normalized = contentType.split(";")[0].trim().toLowerCase(Locale.ROOT);
+            if (SUPPORTED_TYPES.contains(normalized)) {
+                return true;
+            }
+        }
+        if (filename != null) {
+            int dotIndex = filename.lastIndexOf('.');
+            if (dotIndex >= 0) {
+                String ext = filename.substring(dotIndex).toLowerCase(Locale.ROOT);
+                return SUPPORTED_EXTENSIONS.contains(ext);
+            }
+        }
+        return false;
     }
 }

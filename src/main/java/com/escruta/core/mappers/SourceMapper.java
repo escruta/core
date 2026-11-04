@@ -18,7 +18,8 @@ public class SourceMapper {
         source.setContent(content);
         if (dto.link() != null && dto
                 .link()
-                .matches("^(https?://)?(www\\.)?(youtube\\.com/watch\\?v=|youtu\\.be/|youtube\\.com/embed/).*$")) {
+                .matches(
+                        "(?i)^(https?://)?([a-z0-9-]+\\.)?(youtube\\.com/(watch\\?.*v=|embed/|v/|shorts/|live/)|youtu\\.be/)[a-zA-Z0-9_-]{11}.*$")) {
             source.setType(SourceType.YOUTUBE_VIDEO);
         } else {
             source.setType(SourceType.WEBSITE);

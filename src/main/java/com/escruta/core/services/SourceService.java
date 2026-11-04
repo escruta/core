@@ -133,7 +133,7 @@ public class SourceService {
     ) {
         Optional<Notebook> notebookOptional = notebookRepository.findById(notebookId);
 
-        if (!helperService.isSupportedFileType(file.getContentType())) {
+        if (!helperService.isSupportedFileType(file.getContentType(), file.getOriginalFilename())) {
             throw new RuntimeException("Unsupported file type: " + file.getContentType());
         }
 

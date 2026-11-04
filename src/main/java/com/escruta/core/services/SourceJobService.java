@@ -245,6 +245,10 @@ public class SourceJobService {
             content = source.getContent();
         }
 
+        if (content == null || content.isBlank()) {
+            throw new IllegalStateException("No readable content could be extracted from the source");
+        }
+
         asyncChunkIndexingService.indexSource(
                 notebookId,
                 source.getId(),
