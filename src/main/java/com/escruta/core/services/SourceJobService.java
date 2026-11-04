@@ -275,7 +275,7 @@ public class SourceJobService {
                 .findById(job.getSource().getId())
                 .orElseThrow(() -> new IllegalStateException("Source no longer exists"));
 
-        String summary = summarizeInChunks(source.getContent(), SOURCE_SUMMARY_SYSTEM_PROMPT);
+        String summary = summarizeInChunks(source.getContent());
 
         source.setSummary(summary);
         sourceRepository.save(source);
@@ -323,7 +323,7 @@ public class SourceJobService {
         }
     }
 
-    private String summarizeInChunks(String content, String systemPrompt) {
+    private String summarizeInChunks(String content) {
         if (content == null || content.isBlank()) {
             return "";
         }
@@ -333,16 +333,19 @@ public class SourceJobService {
             while (start < content.length()) {
                 int end = Math.min(start + SUMMARY_CHUNK_SIZE, content.length());
                 String chunk = content.substring(start, end);
-                intermediateSummaries.append(callChat(systemPrompt, chunk)).append("\n\n");
+                intermediateSummaries.append(callChat(chunk)).append("\n\n");
                 start = end;
             }
-            return callChat(systemPrompt, intermediateSummaries.toString());
+            return callChat(intermediateSummaries.toString());
         }
-        return callChat(systemPrompt, content);
+        return callChat(content);
     }
 
-    private String callChat(String systemPrompt, String userContent) {
-        Prompt prompt = new Prompt(List.of(new SystemMessage(systemPrompt), new UserMessage(userContent)));
+    private String callChat(String userContent) {
+        Prompt prompt = new Prompt(List.of(
+                new SystemMessage(SOURCE_SUMMARY_SYSTEM_PROMPT),
+                new UserMessage(userContent)
+        ));
         return Objects.requireNonNull(chatModel.call(prompt).getResult()).getOutput().getText();
     }
 
