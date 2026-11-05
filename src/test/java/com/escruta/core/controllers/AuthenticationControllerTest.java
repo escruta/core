@@ -24,8 +24,6 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -96,8 +94,10 @@ class AuthenticationControllerTest {
         session.setUserId(user.getId());
         session.setExpiresAt(Instant.now().plusSeconds(3600));
 
-        when(authCodeService.verifyCode(eq("test@example.com"), eq("123456")))
-                .thenReturn(new AuthCodeService.VerificationOutcome(false, user, session, null));
+        when(authCodeService.verifyCode(
+                eq("test@example.com"),
+                eq("123456")
+        )).thenReturn(new AuthCodeService.VerificationOutcome(false, user, session, null));
 
         mockMvc
                 .perform(post("/auth/verify-code")
@@ -114,8 +114,10 @@ class AuthenticationControllerTest {
     void verifyCode_shouldReturnVerificationTokenWhenNewUser() throws Exception {
         var request = new VerifyEmailCodeRequest("new@example.com", "123456");
 
-        when(authCodeService.verifyCode(eq("new@example.com"), eq("123456")))
-                .thenReturn(new AuthCodeService.VerificationOutcome(true, null, null, "verification-token"));
+        when(authCodeService.verifyCode(
+                eq("new@example.com"),
+                eq("123456")
+        )).thenReturn(new AuthCodeService.VerificationOutcome(true, null, null, "verification-token"));
 
         mockMvc
                 .perform(post("/auth/verify-code")
@@ -141,8 +143,11 @@ class AuthenticationControllerTest {
         session.setUserId(user.getId());
         session.setExpiresAt(Instant.now().plusSeconds(3600));
 
-        when(authCodeService.completeRegistration(eq("new@example.com"), eq("verification-token"), eq("New User")))
-                .thenReturn(new AuthCodeService.RegistrationOutcome(user, session));
+        when(authCodeService.completeRegistration(
+                eq("new@example.com"),
+                eq("verification-token"),
+                eq("New User")
+        )).thenReturn(new AuthCodeService.RegistrationOutcome(user, session));
 
         mockMvc
                 .perform(post("/auth/complete-registration")

@@ -148,7 +148,7 @@ public class ToolsGenerationService {
         return payload;
     }
 
-    private String generateContent(GenerationJob job) throws Exception {
+    private String generateContent(GenerationJob job) {
         UUID notebookId = job.getNotebook().getId();
 
         if (sourceService.hasNoSources(notebookId)) {
@@ -176,7 +176,7 @@ public class ToolsGenerationService {
         };
     }
 
-    private String generateStudyGuide(String context) throws Exception {
+    private String generateStudyGuide(String context) {
         StudyGuideResponse response = ChatClient
                 .create(chatModel)
                 .prompt()
@@ -200,7 +200,7 @@ public class ToolsGenerationService {
         return objectMapper.writeValueAsString(response);
     }
 
-    private String generateFlashcards(String context) throws Exception {
+    private String generateFlashcards(String context) {
         FlashcardsResponse response = ChatClient
                 .create(chatModel)
                 .prompt()
@@ -221,7 +221,7 @@ public class ToolsGenerationService {
         return objectMapper.writeValueAsString(response);
     }
 
-    private String generateQuestionnaire(String context) throws Exception {
+    private String generateQuestionnaire(String context) {
         QuestionnaireResponse response = ChatClient
                 .create(chatModel)
                 .prompt()
@@ -249,7 +249,7 @@ public class ToolsGenerationService {
         return objectMapper.writeValueAsString(response);
     }
 
-    private String generateMindMap(String context) throws Exception {
+    private String generateMindMap(String context) {
         MindMapResponse response = ChatClient
                 .create(chatModel)
                 .prompt()

@@ -9,7 +9,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @SpringBootApplication
 public class EscrutaCore {
-    public static void main(String[] args) {
+    static void main(String[] args) {
         SpringApplication.run(EscrutaCore.class, args);
     }
 }

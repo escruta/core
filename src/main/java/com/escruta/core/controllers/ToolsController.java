@@ -98,6 +98,6 @@ public class ToolsController {
         return generationService
                 .getLatestCompletedJob(notebookId, user.getId(), type)
                 .map(job -> ResponseEntity.ok(GenerationJobResponse.from(job)))
-                .orElseGet(() -> ResponseEntity.ok((GenerationJobResponse) null));
+                .orElseGet(() -> ResponseEntity.ok(null));
     }
 }

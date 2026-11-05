@@ -1,15 +1,7 @@
 package com.escruta.core.services;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.stream.Collectors;
-
-import org.springframework.lang.NonNull;
-import reactor.core.scheduler.Scheduler;
-import reactor.core.scheduler.Schedulers;
-
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
@@ -18,8 +10,14 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.document.Document;
-import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
+import reactor.core.scheduler.Scheduler;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 public class CustomQuestionAnswerAdvisor implements BaseAdvisor {
     public static final String RETRIEVED_DOCUMENTS = "qa_retrieved_documents";
@@ -53,8 +51,7 @@ public class CustomQuestionAnswerAdvisor implements BaseAdvisor {
             @Nullable List<UUID> selectedSourceIds,
             int topK,
             @Nullable PromptTemplate promptTemplate,
-            @Nullable Scheduler scheduler,
-            int order
+            @Nullable Scheduler scheduler
     ) {
         Assert.notNull(retrievalService, "retrievalService cannot be null");
         Assert.notNull(notebookId, "notebookId cannot be null");
@@ -69,7 +66,7 @@ public class CustomQuestionAnswerAdvisor implements BaseAdvisor {
         this.scheduler = scheduler != null ?
                 scheduler :
                 BaseAdvisor.DEFAULT_SCHEDULER;
-        this.order = order;
+        this.order = CustomQuestionAnswerAdvisor.DEFAULT_ORDER;
     }
 
     public static Builder builder(RetrievalService retrievalService, UUID notebookId) {
@@ -82,7 +79,7 @@ public class CustomQuestionAnswerAdvisor implements BaseAdvisor {
     }
 
     @Override
-    public ChatClientRequest before(ChatClientRequest chatClientRequest, @NonNull AdvisorChain advisorChain) {
+    public @NonNull ChatClientRequest before(ChatClientRequest chatClientRequest, @NonNull AdvisorChain advisorChain) {
         String query = chatClientRequest.prompt().getUserMessage().getText();
 
         List<Document> documents = this.retrievalService.search(
@@ -101,6 +98,7 @@ public class CustomQuestionAnswerAdvisor implements BaseAdvisor {
                 .collect(Collectors.joining(System.lineSeparator() + "---------------------" + System.lineSeparator()));
 
         UserMessage userMessage = chatClientRequest.prompt().getUserMessage();
+        assert userMessage.getText() != null;
         String augmentedUserText = this.promptTemplate.render(Map.of(
                 "query",
                 userMessage.getText(),
@@ -116,7 +114,10 @@ public class CustomQuestionAnswerAdvisor implements BaseAdvisor {
     }
 
     @Override
-    public ChatClientResponse after(ChatClientResponse chatClientResponse, @NonNull AdvisorChain advisorChain) {
+    public @NonNull ChatClientResponse after(
+            ChatClientResponse chatClientResponse,
+            @NonNull AdvisorChain advisorChain
+    ) {
         ChatResponse.Builder chatResponseBuilder;
         if (chatClientResponse.chatResponse() == null) {
             chatResponseBuilder = ChatResponse.builder();
@@ -132,7 +133,7 @@ public class CustomQuestionAnswerAdvisor implements BaseAdvisor {
     }
 
     @Override
-    public Scheduler getScheduler() {
+    public @NonNull Scheduler getScheduler() {
         return this.scheduler;
     }
 
@@ -141,11 +142,12 @@ public class CustomQuestionAnswerAdvisor implements BaseAdvisor {
         private final UUID notebookId;
         private List<UUID> selectedSourceIds;
         private int topK = DEFAULT_TOP_K;
-        private PromptTemplate promptTemplate;
-        private Scheduler scheduler;
-        private int order = DEFAULT_ORDER;
+        private final PromptTemplate promptTemplate;
+        private final Scheduler scheduler;
 
         private Builder(RetrievalService retrievalService, UUID notebookId) {
+            this.promptTemplate = null;
+            this.scheduler = null;
             Assert.notNull(retrievalService, "The retrievalService must not be null!");
             Assert.notNull(notebookId, "The notebookId must not be null!");
             this.retrievalService = retrievalService;
@@ -162,24 +164,6 @@ public class CustomQuestionAnswerAdvisor implements BaseAdvisor {
             return this;
         }
 
-        public Builder promptTemplate(PromptTemplate promptTemplate) {
-            Assert.notNull(promptTemplate, "promptTemplate cannot be null");
-            this.promptTemplate = promptTemplate;
-            return this;
-        }
-
-        public Builder protectFromBlocking(boolean protectFromBlocking) {
-            this.scheduler = protectFromBlocking ?
-                    BaseAdvisor.DEFAULT_SCHEDULER :
-                    Schedulers.immediate();
-            return this;
-        }
-
-        public Builder order(int order) {
-            this.order = order;
-            return this;
-        }
-
         public CustomQuestionAnswerAdvisor build() {
             return new CustomQuestionAnswerAdvisor(
                     this.retrievalService,
@@ -187,11 +171,8 @@ public class CustomQuestionAnswerAdvisor implements BaseAdvisor {
                     this.selectedSourceIds,
                     this.topK,
                     this.promptTemplate,
-                    this.scheduler,
-                    this.order
+                    this.scheduler
             );
         }
-
     }
-
 }

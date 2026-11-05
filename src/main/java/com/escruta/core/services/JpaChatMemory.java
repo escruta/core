@@ -1,6 +1,5 @@
 package com.escruta.core.services;
 
-import com.escruta.core.controllers.ChatController;
 import com.escruta.core.entities.ChatMessage;
 import com.escruta.core.repositories.ChatMessageRepository;
 import lombok.RequiredArgsConstructor;
