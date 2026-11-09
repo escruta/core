@@ -39,6 +39,8 @@ application at runtime.
 | `ESCRUTA_DB_POOL_SIZE`                        | HikariCP maximum pool size                           | `15`                                    |
 | `ESCRUTA_VIRTUAL_THREADS`                     | Enable Java virtual threads for web and async work   | `true`                                  |
 | `ESCRUTA_JOBS_MAX_CONCURRENCY`                | Max concurrent AI/source jobs                        | `10`                                    |
+| `ESCRUTA_JOBS_SUMMARY_PARALLELISM`            | Parallel AI calls per source summary                 | `5`                                     |
+| `ESCRUTA_JOBS_SUMMARY_MAX_CHUNKS`             | Max chunks sampled per summary of a large source     | `12`                                    |
 | `ESCRUTA_RATE_LIMIT_ENABLED`                  | Enable Redis-based request rate limiting             | `true`                                  |
 | `ESCRUTA_RATE_LIMIT_AUTH`                     | Auth requests per window (email + IP)                | `10`                                    |
 | `ESCRUTA_RATE_LIMIT_CHAT`                     | Chat/tool requests per window (user)                 | `30`                                    |

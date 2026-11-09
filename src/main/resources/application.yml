@@ -121,6 +121,8 @@ services:
     dir: ${ESCRUTA_UPLOADS_DIR:${java.io.tmpdir}/escruta-uploads}
   jobs:
     max-concurrency: ${ESCRUTA_JOBS_MAX_CONCURRENCY:10}
+    summary-parallelism: ${ESCRUTA_JOBS_SUMMARY_PARALLELISM:5}
+    summary-max-chunks: ${ESCRUTA_JOBS_SUMMARY_MAX_CHUNKS:12}
   rate-limit:
     enabled: ${ESCRUTA_RATE_LIMIT_ENABLED:true}
     auth-requests-per-window: ${ESCRUTA_RATE_LIMIT_AUTH:10}

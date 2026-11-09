@@ -33,12 +33,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 @RequiredArgsConstructor
@@ -58,6 +62,12 @@ public class SourceJobService {
 
     @Value("${services.jobs.max-concurrency:10}")
     private int maxConcurrency;
+
+    @Value("${services.jobs.summary-parallelism:5}")
+    private int summaryParallelism;
+
+    @Value("${services.jobs.summary-max-chunks:12}")
+    private int summaryMaxChunks;
 
     private TransactionTemplate transactionTemplate;
     private Semaphore jobSlots;
@@ -229,6 +239,14 @@ public class SourceJobService {
 
     @EventListener(ApplicationReadyEvent.class)
     public void resumePendingJobs() {
+        // No job can be running in this instance before ApplicationReadyEvent.
+        // Any PROCESSING job is orphaned, even if it is not old enough for the
+        // stale check used during normal claiming.
+        int requeued = jobRepository.requeueProcessingJobs();
+        if (requeued > 0) {
+            log.info("Requeued {} orphaned source jobs", requeued);
+        }
+
         List<SourceJob> pending = jobRepository.findByStatusIn(List.of(
                 SourceJob.JobStatus.PENDING,
                 SourceJob.JobStatus.PROCESSING
@@ -336,18 +354,90 @@ public class SourceJobService {
         if (content == null || content.isBlank()) {
             return "";
         }
-        if (content.length() > SUMMARY_CHUNK_SIZE) {
-            StringBuilder intermediateSummaries = new StringBuilder();
-            int start = 0;
-            while (start < content.length()) {
-                int end = Math.min(start + SUMMARY_CHUNK_SIZE, content.length());
-                String chunk = content.substring(start, end);
-                intermediateSummaries.append(callChat(chunk)).append("\n\n");
-                start = end;
-            }
-            return callChat(intermediateSummaries.toString());
+        List<String> allChunks = splitIntoChunks(content);
+        List<String> chunks = selectChunks(allChunks, summaryMaxChunks);
+        if (chunks.size() == 1) {
+            return callChat(chunks.getFirst());
         }
-        return callChat(content);
+
+        int parallelism = Math.max(1, Math.min(summaryParallelism, chunks.size()));
+        long startedAt = System.nanoTime();
+        log.info(
+                "Summarizing {} characters: {} chunks, {} selected, parallelism {}",
+                content.length(),
+                allChunks.size(),
+                chunks.size(),
+                parallelism
+        );
+
+        String[] summaries = new String[chunks.size()];
+        AtomicInteger nextChunk = new AtomicInteger();
+        AtomicReference<RuntimeException> failure = new AtomicReference<>();
+
+        List<CompletableFuture<Void>> workers = new ArrayList<>(parallelism);
+        for (int i = 0; i < parallelism; i++) {
+            workers.add(CompletableFuture.runAsync(
+                    () -> {
+                        int index;
+                        while (failure.get() == null && (index = nextChunk.getAndIncrement()) < chunks.size()) {
+                            try {
+                                summaries[index] = callChat(chunks.get(index));
+                            } catch (RuntimeException e) {
+                                failure.compareAndSet(null, e);
+                            }
+                        }
+                    }, taskExecutor
+            ));
+        }
+
+        CompletableFuture.allOf(workers.toArray(CompletableFuture[]::new)).join();
+
+        RuntimeException error = failure.get();
+        if (error != null) {
+            throw error;
+        }
+
+        StringBuilder intermediateSummaries = new StringBuilder();
+        for (String summary : summaries) {
+            intermediateSummaries.append(summary).append("\n\n");
+        }
+        String summary = callChat(intermediateSummaries.toString());
+        log.info(
+                "Source summary finished in {} ms using {} chunks",
+                (System.nanoTime() - startedAt) / 1_000_000,
+                chunks.size()
+        );
+        return summary;
+    }
+
+    private List<String> selectChunks(List<String> chunks, int maxChunks) {
+        if (maxChunks <= 0 || chunks.size() <= maxChunks) {
+            return chunks;
+        }
+        if (maxChunks == 1) {
+            return List.of(chunks.getFirst());
+        }
+
+        // Keep a uniform sample across the whole document, including its
+        // beginning and end. This bounds the number of AI calls for very
+        // large sources without only reading the first pages.
+        List<String> selected = new ArrayList<>(maxChunks);
+        for (int i = 0; i < maxChunks; i++) {
+            int index = (int) Math.round((double) i * (chunks.size() - 1) / (maxChunks - 1));
+            selected.add(chunks.get(index));
+        }
+        return selected;
+    }
+
+    private List<String> splitIntoChunks(String content) {
+        List<String> chunks = new ArrayList<>();
+        int start = 0;
+        while (start < content.length()) {
+            int end = Math.min(start + SUMMARY_CHUNK_SIZE, content.length());
+            chunks.add(content.substring(start, end));
+            start = end;
+        }
+        return chunks;
     }
 
     private String callChat(String userContent) {

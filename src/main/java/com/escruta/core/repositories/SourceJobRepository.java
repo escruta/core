@@ -38,4 +38,14 @@ public interface SourceJobRepository extends CrudRepository<SourceJob, UUID> {
                        and j.updatedAt < :staleBefore))
             """)
     int claim(UUID jobId, java.time.Instant staleBefore);
+
+    @org.springframework.transaction.annotation.Transactional
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update SourceJob j
+            set j.status = com.escruta.core.entities.SourceJob.JobStatus.PENDING,
+                j.updatedAt = CURRENT_TIMESTAMP
+            where j.status = com.escruta.core.entities.SourceJob.JobStatus.PROCESSING
+            """)
+    int requeueProcessingJobs();
 }
