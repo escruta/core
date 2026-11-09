@@ -49,7 +49,7 @@ public interface NotebookRepository extends JpaRepository<Notebook, UUID> {
     @Query("""
             select new com.escruta.core.dtos.notebook.NotebookResponseDTO(
                 n.id,
-                new com.escruta.core.dtos.BasicUser(u.id, u.name, u.email, u.createdAt, u.updatedAt),
+                new com.escruta.core.dtos.BasicUser(u),
                 n.icon, n.title, f.id, n.createdAt, n.updatedAt, n.lastActivityAt)
             from Notebook n
             join n.user u
@@ -61,7 +61,7 @@ public interface NotebookRepository extends JpaRepository<Notebook, UUID> {
     @Query("""
             select new com.escruta.core.dtos.notebook.NotebookResponseDTO(
                 n.id,
-                new com.escruta.core.dtos.BasicUser(u.id, u.name, u.email, u.createdAt, u.updatedAt),
+                new com.escruta.core.dtos.BasicUser(u),
                 n.icon, n.title, f.id, n.createdAt, n.updatedAt, n.lastActivityAt)
             from Notebook n
             join n.user u
@@ -73,7 +73,7 @@ public interface NotebookRepository extends JpaRepository<Notebook, UUID> {
     @Query("""
             select new com.escruta.core.dtos.notebook.NotebookResponseDTO(
                 n.id,
-                new com.escruta.core.dtos.BasicUser(u.id, u.name, u.email, u.createdAt, u.updatedAt),
+                new com.escruta.core.dtos.BasicUser(u),
                 n.icon, n.title, f.id, n.createdAt, n.updatedAt, n.lastActivityAt)
             from Notebook n
             join n.user u
