@@ -10,15 +10,17 @@ import com.escruta.core.repositories.EmailVerificationRepository;
 import com.escruta.core.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.codec.Hex;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Optional;
@@ -31,9 +33,12 @@ public class AuthCodeService {
     private final UserRepository userRepository;
     private final TokenService tokenService;
     private final EmailService emailService;
+    private final RateLimitService rateLimitService;
+    private final StringRedisTemplate redisTemplate;
 
     private static final SecureRandom secureRandom = new SecureRandom();
     private static final Base64.Encoder base64Encoder = Base64.getUrlEncoder().withoutPadding();
+    private static final String ATTEMPTS_KEY_PREFIX = "auth:attempts:";
 
     @Value("${security.auth-code.length:6}")
     private int codeLength;
@@ -47,14 +52,24 @@ public class AuthCodeService {
     @Value("${security.auth-code.verification-token-ttl-seconds:900}")
     private long verificationTokenTtlSeconds;
 
-    public record VerificationOutcome(boolean newUser, User user, AccessToken session, String verificationToken) {
+    public record VerificationOutcome(
+            boolean newUser,
+            User user,
+            AccessToken session,
+            String verificationToken
+    ) {
     }
 
-    public record RegistrationOutcome(User user, AccessToken session) {
+    public record RegistrationOutcome(
+            User user,
+            AccessToken session
+    ) {
     }
 
     public void requestCode(String rawEmail) {
         String email = normalize(rawEmail);
+        rateLimitService.checkAuthRequest(email);
+
         String code = generateCode();
         EmailAuthCode authCode = new EmailAuthCode();
         authCode.setEmail(email);
@@ -63,24 +78,28 @@ public class AuthCodeService {
         authCode.setAttempts(0);
         authCode.setTimeToLive(codeTtlSeconds);
         emailAuthCodeRepository.save(authCode);
+        clearAttempts(email);
         emailService.sendVerificationCode(email, code);
     }
 
-    @Transactional
     public VerificationOutcome verifyCode(String rawEmail, String code) {
         String email = normalize(rawEmail);
-        EmailAuthCode authCode = emailAuthCodeRepository.findById(email).orElseThrow(
-                () -> new BadCredentialsException("Invalid or expired code"));
+        EmailAuthCode authCode = emailAuthCodeRepository
+                .findById(email)
+                .orElseThrow(() -> new BadCredentialsException("Invalid or expired code"));
 
         if (authCode.getExpiresAt().isBefore(Instant.now())) {
             emailAuthCodeRepository.deleteById(email);
+            clearAttempts(email);
             throw new BadCredentialsException("Invalid or expired code");
         }
 
         if (!hash(code.trim()).equals(authCode.getCodeHash())) {
-            authCode.setAttempts(authCode.getAttempts() + 1);
-            if (authCode.getAttempts() >= maxAttempts) {
+            long attempts = incrementAttempts(email, authCode.getAttempts());
+            authCode.setAttempts((int) Math.min(Integer.MAX_VALUE, attempts));
+            if (attempts >= maxAttempts) {
                 emailAuthCodeRepository.deleteById(email);
+                clearAttempts(email);
             } else {
                 emailAuthCodeRepository.save(authCode);
             }
@@ -88,6 +107,7 @@ public class AuthCodeService {
         }
 
         emailAuthCodeRepository.deleteById(email);
+        clearAttempts(email);
 
         Optional<User> existingUser = userRepository.findByEmail(email);
         if (existingUser.isPresent()) {
@@ -111,7 +131,6 @@ public class AuthCodeService {
         return new VerificationOutcome(true, null, null, verificationToken);
     }
 
-    @Transactional
     public RegistrationOutcome completeRegistration(String rawEmail, String verificationToken, String name) {
         String email = normalize(rawEmail);
         EmailVerification verification = emailVerificationRepository
@@ -127,7 +146,12 @@ public class AuthCodeService {
         User user = new User();
         user.setEmail(email);
         user.setName(name.trim());
-        User saved = userRepository.save(user);
+        User saved;
+        try {
+            saved = userRepository.save(user);
+        } catch (DataIntegrityViolationException e) {
+            throw new DuplicateFieldException("email", email);
+        }
 
         emailVerificationRepository.deleteById(verification.getToken());
 
@@ -135,8 +159,31 @@ public class AuthCodeService {
         return new RegistrationOutcome(saved, session);
     }
 
+    private long incrementAttempts(String email, int fallbackAttempts) {
+        try {
+            String key = ATTEMPTS_KEY_PREFIX + email;
+            Long attempts = redisTemplate.opsForValue().increment(key);
+            if (attempts != null && attempts == 1L) {
+                redisTemplate.expire(key, Duration.ofSeconds(codeTtlSeconds));
+            }
+            return attempts != null ?
+                    attempts :
+                    (long) fallbackAttempts + 1;
+        } catch (Exception e) {
+            return (long) fallbackAttempts + 1;
+        }
+    }
+
+    private void clearAttempts(String email) {
+        try {
+            redisTemplate.delete(ATTEMPTS_KEY_PREFIX + email);
+        } catch (Exception ignored) {
+            // The code itself is already invalidated; attempts will expire with its own TTL.
+        }
+    }
+
     private String normalize(String email) {
-        return email.trim().toLowerCase();
+        return email.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
     private String generateCode() {

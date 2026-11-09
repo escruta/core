@@ -8,7 +8,9 @@ import com.escruta.core.dtos.source.SourceTextCreationDTO;
 import com.escruta.core.dtos.source.SourceUpdateDTO;
 import com.escruta.core.dtos.source.SourceWithContentDTO;
 import com.escruta.core.dtos.tools.JobStartedResponse;
+import com.escruta.core.services.RateLimitService;
 import com.escruta.core.services.SourceService;
+import com.escruta.core.services.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -24,6 +26,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SourceController {
     private final SourceService sourceService;
+    private final RateLimitService rateLimitService;
+    private final UserService userService;
 
     @GetMapping
     public ResponseEntity<List<SourceResponseDTO>> getNotebookSources(
@@ -120,6 +124,7 @@ public class SourceController {
             @PathVariable UUID notebookId,
             @PathVariable UUID sourceId
     ) {
+        rateLimitService.checkChatRequest(userService.getUserId());
         var job = sourceService.generateSummary(notebookId, sourceId);
         return ResponseEntity.accepted().body(job);
     }

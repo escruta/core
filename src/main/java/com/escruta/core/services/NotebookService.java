@@ -5,14 +5,13 @@ import com.escruta.core.dtos.notebook.NotebookResponseDTO;
 import com.escruta.core.dtos.notebook.NotebookUpdateDTO;
 import com.escruta.core.dtos.notebook.NotebookWithDetailsDTO;
 import com.escruta.core.dtos.notebook.NotebooksPageResponse;
-import com.escruta.core.dtos.source.SourceResponseDTO;
 import com.escruta.core.entities.Notebook;
 import com.escruta.core.mappers.NotebookMapper;
-import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.repositories.FolderRepository;
+import com.escruta.core.repositories.NotebookRepository;
+import com.escruta.core.repositories.OffsetPageRequest;
 import com.escruta.core.repositories.SourceRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,27 +31,35 @@ public class NotebookService {
     private final NoteService noteService;
 
     public List<NotebookResponseDTO> getAllUserNotebooks() {
-        return notebookRepository.findByUserId(userService.getUserId()).stream().map(NotebookResponseDTO::new).toList();
+        UUID userId = userService.getUserId();
+        if (userId == null) {
+            return List.of();
+        }
+        return notebookRepository.findResponsesByUserId(userId);
     }
 
+    @Transactional(readOnly = true)
     public Optional<NotebookWithDetailsDTO> getUserNotebookWithDetails(UUID id) {
         Optional<Notebook> notebookOptional = notebookRepository.findById(id);
         if (notebookOptional.isPresent()) {
             Notebook notebook = notebookOptional.get();
             var notes = noteService.getNotes(id);
-            var sources = sourceRepository.findByNotebookId(id).stream().map(SourceResponseDTO::new).toList();
+            var sources = sourceRepository.findSummariesByNotebookId(id);
             return Optional.of(new NotebookWithDetailsDTO(notebook, notes, sources));
         }
 
         return Optional.empty();
     }
 
+    @Transactional
     public NotebookResponseDTO createNotebook(NotebookCreationDTO createNotebookDto) {
         var currentUser = userService.getCurrentUser();
         if (currentUser != null) {
             Notebook notebook = notebookMapper.toNotebook(createNotebookDto, currentUser);
             if (createNotebookDto.folderId() != null) {
-                notebook.setFolder(folderRepository.findById(createNotebookDto.folderId()).orElse(null));
+                notebook.setFolder(folderRepository
+                        .findByIdAndUserId(createNotebookDto.folderId(), currentUser.getId())
+                        .orElse(null));
             }
             notebookRepository.save(notebook);
             return new NotebookResponseDTO(notebook);
@@ -60,6 +67,7 @@ public class NotebookService {
         return null;
     }
 
+    @Transactional
     public NotebookResponseDTO updateNotebook(NotebookUpdateDTO newNotebookDto) {
         try {
             UUID notebookId = UUID.fromString(newNotebookDto.id());
@@ -70,8 +78,9 @@ public class NotebookService {
                 if (Boolean.TRUE.equals(newNotebookDto.removeFolder())) {
                     notebook.setFolder(null);
                 } else if (newNotebookDto.folderId() != null) {
+                    UUID userId = userService.getUserId();
                     notebook.setFolder(folderRepository
-                            .findById(newNotebookDto.folderId())
+                            .findByIdAndUserId(newNotebookDto.folderId(), userId)
                             .orElse(notebook.getFolder()));
                 }
                 notebookRepository.save(notebook);
@@ -84,28 +93,29 @@ public class NotebookService {
     }
 
     public NotebooksPageResponse getUserNotebooks(int limit, int offset, String search, String sort) {
-        var currentUser = userService.getCurrentUser();
-        if (currentUser == null) {
+        UUID userId = userService.getUserId();
+        if (userId == null) {
             return new NotebooksPageResponse(List.of(), 0, false);
         }
 
-        var userId = currentUser.getId();
-        var pageable = PageRequest.of(offset / limit, limit, buildSort(sort));
+        int boundedLimit = Math.max(1, Math.min(limit, 100));
+        long boundedOffset = Math.max(0, offset);
+        var pageable = new OffsetPageRequest(boundedOffset, boundedLimit, buildSort(sort));
 
-        List<Notebook> notebooks;
+        List<NotebookResponseDTO> notebooks;
         long total;
 
         if (search != null && !search.isBlank()) {
-            notebooks = notebookRepository.findByUserIdAndTitleContainingIgnoreCase(userId, search.trim(), pageable);
-            total = notebookRepository.countByUserIdAndTitleContainingIgnoreCase(userId, search.trim());
+            String term = search.trim();
+            notebooks = notebookRepository.findResponsesByUserIdAndTitle(userId, term, pageable);
+            total = notebookRepository.countByUserIdAndTitleContainingIgnoreCase(userId, term);
         } else {
-            notebooks = notebookRepository.findByUserId(userId, pageable);
+            notebooks = notebookRepository.findResponsesByUserId(userId, pageable);
             total = notebookRepository.countByUserId(userId);
         }
 
-        var list = notebooks.stream().map(NotebookResponseDTO::new).toList();
-        boolean hasMore = (offset + list.size()) < total;
-        return new NotebooksPageResponse(list, total, hasMore);
+        boolean hasMore = (boundedOffset + notebooks.size()) < total;
+        return new NotebooksPageResponse(notebooks, total, hasMore);
     }
 
     private Sort buildSort(String sort) {

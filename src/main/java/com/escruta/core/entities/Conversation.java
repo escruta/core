@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.sql.Timestamp;
@@ -14,12 +15,13 @@ import java.sql.Timestamp;
 @Setter
 @Table(name = "conversations")
 @Entity
+@DynamicUpdate
 public class Conversation {
     @Id
     @Column(nullable = false)
     private String id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(nullable = false)
     private Notebook notebook;
 
@@ -36,6 +38,10 @@ public class Conversation {
 
     @Column(nullable = false)
     private boolean hasUnseenReply = false;
+
+    @Version
+    @Column(nullable = false)
+    private Long version;
 
     @CreationTimestamp
     @Column(updatable = false)

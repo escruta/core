@@ -22,6 +22,7 @@ public class ChatMessageService {
     };
     private static final TypeReference<List<ChatReplyMessage.CitedSource>> CITED_SOURCE_LIST = new TypeReference<>() {
     };
+    private static final int MAX_STORED_CITATION_CHARS = 500;
 
     private final ChatMessageRepository chatMessageRepository;
     private final ObjectMapper objectMapper;
@@ -48,8 +49,26 @@ public class ChatMessageService {
         assistantMessage.setConversation(conversation);
         assistantMessage.setRole("ASSISTANT");
         assistantMessage.setContent(assistantContent);
-        assistantMessage.setCitedSources(toJson(citedSources));
+        assistantMessage.setCitedSources(toJson(truncateForStorage(citedSources)));
         chatMessageRepository.save(assistantMessage);
+    }
+
+    private List<ChatReplyMessage.CitedSource> truncateForStorage(List<ChatReplyMessage.CitedSource> citedSources) {
+        if (citedSources == null || citedSources.isEmpty()) {
+            return citedSources;
+        }
+        return citedSources.stream().map(source -> {
+            String text = source.text();
+            if (text == null || text.length() <= MAX_STORED_CITATION_CHARS) {
+                return source;
+            }
+            return new ChatReplyMessage.CitedSource(
+                    source.id(),
+                    source.documentId(),
+                    source.title(),
+                    text.substring(0, MAX_STORED_CITATION_CHARS)
+            );
+        }).toList();
     }
 
     @Transactional
@@ -66,12 +85,23 @@ public class ChatMessageService {
 
     @Transactional(readOnly = true)
     public List<ChatMessage> getConversationMessages(String conversationId) {
-        return chatMessageRepository.findByConversation_IdOrderByIdAsc(conversationId);
+        return getConversationMessages(conversationId, 1000);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ChatMessage> getConversationMessages(String conversationId, int limit) {
+        int boundedLimit = Math.max(1, Math.min(limit, 1000));
+        List<ChatMessage> recent = chatMessageRepository.findByConversation_IdOrderByIdDesc(
+                conversationId,
+                org.springframework.data.domain.PageRequest.of(0, boundedLimit)
+        );
+        java.util.Collections.reverse(recent);
+        return recent;
     }
 
     @Transactional
     public void deleteByConversationId(String conversationId) {
-        chatMessageRepository.deleteByConversation_Id(conversationId);
+        chatMessageRepository.deleteAllByConversationId(conversationId);
     }
 
     public List<String> deserializeSelectedSourceIds(ChatMessage message) {

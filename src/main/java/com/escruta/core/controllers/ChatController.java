@@ -1,26 +1,31 @@
 package com.escruta.core.controllers;
 
-import com.escruta.core.dtos.ChatRequest;
 import com.escruta.core.dtos.ChatReplyMessage;
+import com.escruta.core.dtos.ChatRequest;
 import com.escruta.core.dtos.ExampleQuestions;
 import com.escruta.core.dtos.NotebookSummaryDTO;
 import com.escruta.core.dtos.tools.JobStartedResponse;
 import com.escruta.core.entities.Conversation;
-import com.escruta.core.entities.Notebook;
 import com.escruta.core.entities.enums.ChatMode;
 import com.escruta.core.entities.enums.ConversationStatus;
 import com.escruta.core.repositories.ConversationRepository;
 import com.escruta.core.repositories.NotebookRepository;
-import com.escruta.core.services.SourceService;
-import com.escruta.core.services.RetrievalService;
 import com.escruta.core.services.ChatMessageService;
+import com.escruta.core.services.CustomQuestionAnswerAdvisor;
+import com.escruta.core.services.ExampleQuestionService;
 import com.escruta.core.services.JpaChatMemory;
+import com.escruta.core.services.NotebookContextService;
+import com.escruta.core.services.RateLimitService;
+import com.escruta.core.services.RetrievalService;
 import com.escruta.core.services.SourceJobService;
 import com.escruta.core.services.SseNotificationService;
+import com.escruta.core.services.UserService;
+import jakarta.annotation.PostConstruct;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.Nullable;
 import org.springframework.ai.chat.client.ChatClient;
-import com.escruta.core.services.CustomQuestionAnswerAdvisor;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
@@ -28,21 +33,27 @@ import org.springframework.ai.document.Document;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-
-import jakarta.validation.Valid;
-
-import java.io.IOException;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-
-import org.jspecify.annotations.Nullable;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import reactor.core.Disposable;
 import reactor.core.scheduler.Schedulers;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 @RestController
 @RequestMapping("notebooks/{notebookId}")
@@ -51,8 +62,6 @@ import tools.jackson.databind.ObjectMapper;
 public class ChatController {
     private static final TypeReference<List<String>> STRING_LIST = new TypeReference<>() {
     };
-
-    private static final int EXAMPLE_QUESTIONS_DOCUMENT_LIMIT = 15;
 
     private static final String UNIFIED_SYSTEM_MESSAGE = """
             You are a helpful AI assistant. Answer questions using ONLY the provided sources.
@@ -91,7 +100,6 @@ public class ChatController {
                - NEVER use parentheses like (\\alpha) or (|0\\rangle)
             """;
 
-    private final SourceService sourceService;
     private final RetrievalService retrievalService;
     private final ChatModel chatModel;
     private final NotebookRepository notebookRepository;
@@ -100,12 +108,34 @@ public class ChatController {
     private final ChatMessageService chatMessageService;
     private final SourceJobService sourceJobService;
     private final SseNotificationService sseNotificationService;
+    private final NotebookContextService notebookContextService;
+    private final ExampleQuestionService exampleQuestionService;
+    private final UserService userService;
+    private final RateLimitService rateLimitService;
     private final ObjectMapper objectMapper;
 
-    private static String systemMessageFor(ChatMode mode) {
+    private ChatClient normalChatClient;
+    private ChatClient learningChatClient;
+
+    @PostConstruct
+    void init() {
+        var memoryAdvisor = MessageChatMemoryAdvisor.builder(chatMemory).build();
+        this.normalChatClient = ChatClient
+                .builder(chatModel)
+                .defaultSystem(UNIFIED_SYSTEM_MESSAGE)
+                .defaultAdvisors(memoryAdvisor)
+                .build();
+        this.learningChatClient = ChatClient
+                .builder(chatModel)
+                .defaultSystem(LEARNING_SYSTEM_MESSAGE)
+                .defaultAdvisors(memoryAdvisor)
+                .build();
+    }
+
+    private ChatClient clientFor(ChatMode mode) {
         return mode == ChatMode.LEARNING ?
-                LEARNING_SYSTEM_MESSAGE :
-                UNIFIED_SYSTEM_MESSAGE;
+                learningChatClient :
+                normalChatClient;
     }
 
     private static ChatMode resolveMode(@Nullable ChatMode mode) {
@@ -114,39 +144,15 @@ public class ChatController {
                 ChatMode.NORMAL;
     }
 
-    private Optional<String> getNotebookContext(UUID notebookId) {
-        if (sourceService.hasNoSources(notebookId)) {
-            return Optional.empty();
-        }
-
-        String query = "core concepts key ideas summary main topic definitions overview";
-        var documents = retrievalService.getDocumentsForNotebook(notebookId, query, EXAMPLE_QUESTIONS_DOCUMENT_LIMIT);
-        if (documents.isEmpty()) {
-            return Optional.empty();
-        }
-
-        String context = documents
-                .stream()
-                .map(Document::getText)
-                .filter(text -> text != null && !text.isBlank())
-                .reduce((a, b) -> a + "\n\n" + b)
-                .orElse("");
-
-        return context.isBlank() ?
-                Optional.empty() :
-                Optional.of(context);
-    }
-
     @PostMapping("summary")
     ResponseEntity<JobStartedResponse> generateSummary(@PathVariable UUID notebookId) {
-        var notebook = notebookRepository.findById(notebookId).orElse(null);
-        if (notebook == null) {
+        rateLimitService.checkChatRequest(userService.getUserId());
+        if (!notebookRepository.existsById(notebookId)) {
             return ResponseEntity.notFound().build();
         }
-
         notebookRepository.updateSummary(notebookId, null, null);
 
-        var job = sourceJobService.startNotebookSummaryJob(notebook);
+        var job = sourceJobService.startNotebookSummaryJob(notebookId);
         return ResponseEntity
                 .accepted()
                 .body(new JobStartedResponse(
@@ -192,55 +198,14 @@ public class ChatController {
         }
 
         notebookRepository.updateSummary(notebookId, null, null);
+        notebookContextService.evict();
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("example-questions")
     public ResponseEntity<ExampleQuestions> getExampleQuestions(@PathVariable UUID notebookId) {
-        Optional<String> context = getNotebookContext(notebookId);
-
-        if (context.isEmpty()) {
-            return ResponseEntity.ok(new ExampleQuestions(List.of()));
-        }
-
-        ExampleQuestions exampleQuestions = ChatClient.create(chatModel).prompt().user("""
-                You are an expert tutor. Based on the provided materials, generate exactly 3 questions that help a student understand the core concepts and the central theme of this subject.
-                
-                RULES:
-                - Focus on **FUNDAMENTAL CONCEPTS** and key ideas that someone learning this topic must understand
-                - Ask about **DEFINITIONS**, **MECHANISMS**, **RELATIONSHIPS** between concepts, or **CAUSE-EFFECT**
-                - Questions must be about the **SUBJECT MATTER** itself, not about the text
-                - Do NOT mention "article", "document", "text", "source", or "Wikipedia"
-                - Do NOT ask what the topic is, what is covered, or ask for lists/summaries
-                - Use "why", "how", or "what is the relationship between" type questions
-                - Each question must be answerable using ONLY the provided information
-                - Make questions specific enough to require understanding, not vague general questions
-                
-                BAD examples:
-                - "What is the main topic?" (too vague)
-                - "What does the text say about X?" (about the text)
-                - "List the types of X" (just listing)
-                
-                GOOD examples:
-                - "Why does X happen when Y occurs?" (mechanism/cause-effect)
-                - "How is X different from Y?" (conceptual distinction)
-                - "What is the relationship between X and Y?" (interconnection)
-                
-                MATERIALS:
-                %s
-                """.formatted(context.get())).call().entity(ExampleQuestions.class);
-
-        if (exampleQuestions != null && exampleQuestions.questions() != null) {
-            List<String> limitedQuestions = exampleQuestions
-                    .questions()
-                    .stream()
-                    .filter(q -> q != null && !q.isBlank())
-                    .limit(3)
-                    .toList();
-            return ResponseEntity.ok(new ExampleQuestions(limitedQuestions));
-        }
-
-        return ResponseEntity.ok(new ExampleQuestions(List.of()));
+        rateLimitService.checkChatRequest(userService.getUserId());
+        return ResponseEntity.ok(new ExampleQuestions(exampleQuestionService.getExampleQuestions(notebookId)));
     }
 
     @PostMapping("chat")
@@ -248,80 +213,53 @@ public class ChatController {
             @PathVariable UUID notebookId,
             @Valid @RequestBody ChatRequest request
     ) {
+        rateLimitService.checkChatRequest(userService.getUserId());
+
         var notebook = notebookRepository.findById(notebookId).orElse(null);
         if (notebook == null) {
             return ResponseEntity.notFound().build();
         }
-
         ChatMode mode = resolveMode(request.mode());
-
-        var chatClient = ChatClient.builder(chatModel).defaultSystem(systemMessageFor(mode)).defaultAdvisors(
-                MessageChatMemoryAdvisor.builder(chatMemory).build(),
-                retrievalService.getQuestionAnswerAdvisor(notebookId, request.selectedSourceIds())
-        ).build();
-
         String conversationId = request.conversationId() != null ?
                 request.conversationId() :
                 UUID.randomUUID().toString();
 
-        var chatResponse = chatClient
+        Conversation conversation;
+        if (request.conversationId() != null) {
+            conversation = conversationRepository
+                    .findByIdAndNotebookId(conversationId, notebookId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Conversation not found"));
+            conversation.setNotebook(notebook);
+        } else {
+            conversation = new Conversation();
+            conversation.setId(conversationId);
+            conversation.setNotebook(notebook);
+            conversation.setTitle(normalizeTitle(null, request.userInput()));
+        }
+
+        var qaAdvisor = retrievalService.getQuestionAnswerAdvisor(notebookId, request.selectedSourceIds());
+        var chatResponse = clientFor(mode)
                 .prompt()
+                .advisors(qaAdvisor)
                 .advisors(advisorSpec -> advisorSpec.param(ChatMemory.CONVERSATION_ID, conversationId))
                 .user(request.userInput())
                 .call()
                 .chatResponse();
 
-        assert chatResponse != null;
-
-        Conversation conversation = conversationRepository.findById(conversationId).orElse(null);
-        if (conversation == null) {
-            conversation = new Conversation();
-            conversation.setId(conversationId);
-            conversation.setNotebook(notebook);
-
-            String title;
-            try {
-                title = ChatClient
-                        .create(chatModel)
-                        .prompt()
-                        .system("Generate a very short and concise title (maximum 5 words) for a conversation that starts with the following message. Respond ONLY with the title, without quotes or extra punctuation. Use the same language as the user's message.")
-                        .user(request.userInput())
-                        .call()
-                        .content();
-
-                if (title != null && !title.isBlank()) {
-                    title = title.replaceAll("^[\"']|[\"']$", "");
-                } else {
-                    title = request.userInput();
-                }
-            } catch (Exception e) {
-                title = request.userInput();
-            }
-
-            if (title.length() > 100) {
-                title = title.substring(0, 97) + "...";
-            }
-            conversation.setTitle(title.trim());
+        if (chatResponse == null || chatResponse.getResult() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The AI provider returned an empty response");
         }
+
         conversation.setMode(mode);
         conversationRepository.save(conversation);
-        notebookRepository.touchLastActivity(conversation.getNotebook().getId());
+        notebookRepository.touchLastActivity(notebookId);
 
         List<Document> documents = chatResponse
                 .getMetadata()
                 .getOrDefault(CustomQuestionAnswerAdvisor.RETRIEVED_DOCUMENTS, List.of());
 
-        List<ChatReplyMessage.CitedSource> citedSources = documents
-                .stream()
-                .map(doc -> new ChatReplyMessage.CitedSource(
-                        doc.getId(),
-                        doc.getMetadata().get("sourceId").toString(),
-                        doc.getMetadata().get("title").toString(),
-                        doc.getText()
-                ))
-                .toList();
-
-        String assistantContent = Objects.requireNonNull(chatResponse.getResult()).getOutput().getText();
+        List<ChatReplyMessage.CitedSource> citedSources = toCitedSources(documents);
+        String assistantContent = Objects.requireNonNull(chatResponse.getResult().getOutput().getText());
         chatMessageService.saveConversationTurn(
                 conversation,
                 request.userInput(),
@@ -340,63 +278,63 @@ public class ChatController {
 
     @PostMapping(value = "chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamChat(@PathVariable UUID notebookId, @Valid @RequestBody ChatRequest request) {
+        rateLimitService.checkChatRequest(userService.getUserId());
+
         var notebook = notebookRepository.findById(notebookId).orElse(null);
         if (notebook == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Notebook not found");
         }
-
         UUID ownerId = notebookRepository.findOwnerId(notebookId);
+        ChatMode mode = resolveMode(request.mode());
+        String conversationId = request.conversationId() != null ?
+                request.conversationId() :
+                UUID.randomUUID().toString();
+
+        Conversation existingConversation = null;
+        if (request.conversationId() != null) {
+            existingConversation = conversationRepository
+                    .findByIdAndNotebookId(conversationId, notebookId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Conversation not found"));
+        }
+        boolean isNewConversation = existingConversation == null;
+
         SseEmitter emitter = new SseEmitter(300_000L);
         AtomicBoolean emitterActive = new AtomicBoolean(true);
+        AtomicBoolean terminal = new AtomicBoolean(false);
+        AtomicReference<Disposable> subscriptionRef = new AtomicReference<>();
 
-        emitter.onCompletion(() -> emitterActive.set(false));
+        emitter.onCompletion(() -> {
+            emitterActive.set(false);
+            disposeQuietly(subscriptionRef.get());
+        });
         emitter.onTimeout(() -> {
             emitterActive.set(false);
+            disposeQuietly(subscriptionRef.get());
             try {
                 emitter.complete();
             } catch (IllegalStateException ignored) {
             }
         });
-        emitter.onError(_ -> emitterActive.set(false));
-
-        ChatMode mode = resolveMode(request.mode());
-
-        String conversationId = request.conversationId() != null ?
-                request.conversationId() :
-                UUID.randomUUID().toString();
-
-        Conversation existingConversation = conversationRepository.findById(conversationId).orElse(null);
-        boolean isNewConversation = existingConversation == null;
-
-        var chatClient = ChatClient.builder(chatModel).defaultSystem(systemMessageFor(mode)).defaultAdvisors(
-                MessageChatMemoryAdvisor.builder(chatMemory).build(),
-                retrievalService.getQuestionAnswerAdvisor(notebookId, request.selectedSourceIds())
-        ).build();
-
-        var streamResponse = chatClient
-                .prompt()
-                .advisors(advisorSpec -> advisorSpec.param(ChatMemory.CONVERSATION_ID, conversationId))
-                .user(request.userInput())
-                .stream()
-                .chatResponse();
+        emitter.onError(_ -> {
+            emitterActive.set(false);
+            disposeQuietly(subscriptionRef.get());
+        });
 
         Conversation conversation = isNewConversation ?
                 new Conversation() :
                 existingConversation;
         if (isNewConversation) {
             conversation.setId(conversationId);
-            conversation.setNotebook(notebook);
             conversation.setTitle(normalizeTitle(null, request.userInput()));
         }
+        conversation.setNotebook(notebook);
         conversation.setMode(mode);
         conversation.setStatus(ConversationStatus.GENERATING);
         conversation.setHasUnseenReply(false);
         conversation = conversationRepository.save(conversation);
-        notebookRepository.touchLastActivity(notebook.getId());
+        notebookRepository.touchLastActivity(notebookId);
 
-        chatMessageService.saveUserMessage(conversation, request.userInput(), request.selectedSourceIds());
-
-        publishConversationUpdated(ownerId, conversation);
+        publishConversationUpdated(ownerId, notebookId, conversation);
 
         trySendEvent(
                 emitter,
@@ -405,48 +343,82 @@ public class ChatController {
         );
 
         AtomicReference<List<Document>> retrievedDocumentsRef = new AtomicReference<>(List.of());
-        AtomicReference<String> accumulatedText = new AtomicReference<>("");
+        StringBuffer accumulatedText = new StringBuffer();
+        var qaAdvisor = retrievalService.getQuestionAnswerAdvisor(notebookId, request.selectedSourceIds());
 
-        streamResponse
-                .doOnNext(chatResponse -> {
-                    Object docs = chatResponse.getMetadata().get(CustomQuestionAnswerAdvisor.RETRIEVED_DOCUMENTS);
-                    if (docs instanceof List<?> list && !list.isEmpty() && retrievedDocumentsRef.get().isEmpty()) {
-                        retrievedDocumentsRef.set(safelyCastDocuments(list));
-                    }
+        final Conversation currentConversation = conversation;
+        var streamResponse = clientFor(mode)
+                .prompt()
+                .advisors(qaAdvisor)
+                .advisors(advisorSpec -> advisorSpec.param(ChatMemory.CONVERSATION_ID, conversationId))
+                .user(request.userInput())
+                .stream()
+                .chatResponse();
 
-                    if (chatResponse.getResult() == null) {
-                        return;
-                    }
-                    String chunk = chatResponse.getResult().getOutput().getText();
-                    if (chunk != null && !chunk.isEmpty()) {
-                        accumulatedText.accumulateAndGet(chunk, String::concat);
-                        trySendEvent(emitter, emitterActive, SseEmitter.event().name("token").data(chunk));
-                    }
-                })
-                .doOnError(error -> Schedulers
-                        .boundedElastic()
-                        .schedule(() -> handleStreamError(
-                                emitter,
-                                emitterActive,
-                                ownerId,
-                                notebook,
-                                conversationId,
-                                error
-                        )))
-                .doOnComplete(() -> Schedulers.boundedElastic().schedule(() -> finalizeStream(
+        Disposable subscription = streamResponse.doOnNext(chatResponse -> {
+            Object docs = chatResponse.getMetadata().get(CustomQuestionAnswerAdvisor.RETRIEVED_DOCUMENTS);
+            if (docs instanceof List<?> list && !list.isEmpty() && retrievedDocumentsRef.get().isEmpty()) {
+                retrievedDocumentsRef.set(safelyCastDocuments(list));
+            }
+
+            if (chatResponse.getResult() == null) {
+                return;
+            }
+            String chunk = chatResponse.getResult().getOutput().getText();
+            if (chunk != null && !chunk.isEmpty()) {
+                accumulatedText.append(chunk);
+                boolean sent = trySendEvent(emitter, emitterActive, SseEmitter.event().name("token").data(chunk));
+                if (!sent) {
+                    disposeQuietly(subscriptionRef.get());
+                }
+            }
+        }).doOnError(error -> Schedulers.boundedElastic().schedule(() -> {
+            if (terminal.compareAndSet(false, true)) {
+                handleStreamError(
                         emitter,
                         emitterActive,
                         ownerId,
-                        notebook,
-                        request.userInput(),
+                        notebookId,
                         conversationId,
-                        isNewConversation,
+                        request.userInput(),
+                        request.selectedSourceIds(),
+                        true,
+                        error
+                );
+            }
+        })).doOnComplete(() -> Schedulers.boundedElastic().schedule(() -> finalizeStream(
+                terminal,
+                emitter,
+                emitterActive,
+                ownerId,
+                notebookId,
+                request.userInput(),
+                request.selectedSourceIds(),
+                conversationId,
+                isNewConversation,
+                retrievedDocumentsRef.get(),
+                accumulatedText.toString(),
+                mode
+        ))).doFinally(signal -> {
+            if (signal == reactor.core.publisher.SignalType.CANCEL) {
+                Schedulers.boundedElastic().schedule(() -> handleStreamCancelled(
+                        terminal,
+                        emitter,
+                        emitterActive,
+                        ownerId,
+                        notebookId,
+                        conversationId,
+                        currentConversation,
+                        request.userInput(),
+                        request.selectedSourceIds(),
                         retrievedDocumentsRef.get(),
-                        accumulatedText.get(),
+                        accumulatedText.toString(),
                         mode
-                )))
-                .subscribe();
+                ));
+            }
+        }).subscribe();
 
+        subscriptionRef.set(subscription);
         return emitter;
     }
 
@@ -455,45 +427,57 @@ public class ChatController {
         return (List<Document>) list;
     }
 
+    private List<ChatReplyMessage.CitedSource> toCitedSources(List<Document> documents) {
+        return documents.stream().map(doc -> new ChatReplyMessage.CitedSource(
+                doc.getId(),
+                String.valueOf(doc.getMetadata().get("sourceId")),
+                String.valueOf(doc.getMetadata().get("title")),
+                doc.getText()
+        )).toList();
+    }
+
     private void finalizeStream(
+            AtomicBoolean terminal,
             SseEmitter emitter,
             AtomicBoolean emitterActive,
             @Nullable UUID ownerId,
-            Notebook notebook,
+            UUID notebookId,
             String userInput,
+            List<UUID> selectedSourceIds,
             String conversationId,
             boolean isNewConversation,
             List<Document> retrievedDocuments,
             String assistantContent,
             ChatMode mode
     ) {
+        if (!terminal.compareAndSet(false, true)) {
+            return;
+        }
+
         try {
-            Conversation conversation = conversationRepository.findById(conversationId).orElse(null);
+            Conversation conversation = conversationRepository
+                    .findByIdAndNotebookId(conversationId, notebookId)
+                    .orElse(null);
             if (conversation == null) {
                 return;
             }
             if (isNewConversation) {
-                String title = generateTitle(userInput);
-                title = normalizeTitle(title, userInput);
-                conversation.setTitle(title);
+                conversation.setTitle(normalizeTitle(conversation.getTitle(), userInput));
             }
             conversation.setMode(mode);
             conversation.setStatus(ConversationStatus.IDLE);
             conversation.setHasUnseenReply(!emitterActive.get());
             conversation = conversationRepository.save(conversation);
-            notebookRepository.touchLastActivity(notebook.getId());
+            notebookRepository.touchLastActivity(notebookId);
 
-            List<ChatReplyMessage.CitedSource> citedSources = retrievedDocuments
-                    .stream()
-                    .map(doc -> new ChatReplyMessage.CitedSource(
-                            doc.getId(),
-                            doc.getMetadata().get("sourceId").toString(),
-                            doc.getMetadata().get("title").toString(),
-                            doc.getText()
-                    ))
-                    .toList();
-
-            chatMessageService.saveAssistantMessage(conversation, assistantContent, citedSources);
+            List<ChatReplyMessage.CitedSource> citedSources = toCitedSources(retrievedDocuments);
+            chatMessageService.saveConversationTurn(
+                    conversation,
+                    userInput,
+                    selectedSourceIds,
+                    assistantContent,
+                    citedSources
+            );
 
             trySendEvent(emitter, emitterActive, SseEmitter.event().name("sources").data(citedSources));
             if (isNewConversation) {
@@ -506,10 +490,20 @@ public class ChatController {
             }
             tryComplete(emitter, emitterActive);
 
-            publishConversationUpdated(ownerId, conversation);
+            publishConversationUpdated(ownerId, notebookId, conversation);
         } catch (Exception e) {
             log.error("Error finalizing chat stream for conversation {}", conversationId, e);
-            handleStreamError(emitter, emitterActive, ownerId, notebook, conversationId, e);
+            handleStreamError(
+                    emitter,
+                    emitterActive,
+                    ownerId,
+                    notebookId,
+                    conversationId,
+                    userInput,
+                    selectedSourceIds,
+                    false,
+                    e
+            );
         }
     }
 
@@ -517,18 +511,26 @@ public class ChatController {
             SseEmitter emitter,
             AtomicBoolean emitterActive,
             @Nullable UUID ownerId,
-            Notebook notebook,
+            UUID notebookId,
             String conversationId,
+            String userInput,
+            List<UUID> selectedSourceIds,
+            boolean persistUserMessage,
             Throwable error
     ) {
         try {
-            Conversation conversation = conversationRepository.findById(conversationId).orElse(null);
+            Conversation conversation = conversationRepository
+                    .findByIdAndNotebookId(conversationId, notebookId)
+                    .orElse(null);
             if (conversation != null) {
+                if (persistUserMessage) {
+                    chatMessageService.saveUserMessage(conversation, userInput, selectedSourceIds);
+                }
                 conversation.setStatus(ConversationStatus.FAILED);
                 conversation.setHasUnseenReply(false);
                 conversation = conversationRepository.save(conversation);
-                notebookRepository.touchLastActivity(notebook.getId());
-                publishConversationUpdated(ownerId, conversation);
+                notebookRepository.touchLastActivity(notebookId);
+                publishConversationUpdated(ownerId, notebookId, conversation);
             }
         } catch (Exception e) {
             log.warn("Could not record failure for conversation {}: {}", conversationId, e.getMessage());
@@ -536,12 +538,60 @@ public class ChatController {
         sendErrorAndComplete(emitter, emitterActive, error);
     }
 
-    private void publishConversationUpdated(@Nullable UUID ownerId, Conversation conversation) {
+    private void handleStreamCancelled(
+            AtomicBoolean terminal,
+            SseEmitter emitter,
+            AtomicBoolean emitterActive,
+            @Nullable UUID ownerId,
+            UUID notebookId,
+            String conversationId,
+            Conversation currentConversation,
+            String userInput,
+            List<UUID> selectedSourceIds,
+            List<Document> retrievedDocuments,
+            String assistantContent,
+            ChatMode mode
+    ) {
+        if (!terminal.compareAndSet(false, true)) {
+            return;
+        }
+
+        try {
+            Conversation conversation = conversationRepository
+                    .findByIdAndNotebookId(conversationId, notebookId)
+                    .orElse(currentConversation);
+            conversation.setMode(mode);
+            conversation.setStatus(ConversationStatus.IDLE);
+            conversation.setHasUnseenReply(true);
+            conversation = conversationRepository.save(conversation);
+            notebookRepository.touchLastActivity(notebookId);
+
+            if (assistantContent != null && !assistantContent.isBlank()) {
+                chatMessageService.saveConversationTurn(
+                        conversation,
+                        userInput,
+                        selectedSourceIds,
+                        assistantContent,
+                        toCitedSources(retrievedDocuments)
+                );
+            } else {
+                chatMessageService.saveUserMessage(conversation, userInput, selectedSourceIds);
+            }
+
+            emitterActive.set(false);
+            completeQuietly(emitter);
+            publishConversationUpdated(ownerId, notebookId, conversation);
+        } catch (Exception e) {
+            log.warn("Could not record cancellation for conversation {}: {}", conversationId, e.getMessage());
+        }
+    }
+
+    private void publishConversationUpdated(@Nullable UUID ownerId, UUID notebookId, Conversation conversation) {
         if (ownerId == null) {
             return;
         }
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("notebookId", conversation.getNotebook().getId().toString());
+        payload.put("notebookId", notebookId.toString());
         payload.put("conversationId", conversation.getId());
         payload.put("title", conversation.getTitle());
         payload.put("mode", conversation.getMode().toString());
@@ -569,7 +619,7 @@ public class ChatController {
         try {
             emitter.send(event);
             return true;
-        } catch (IOException | IllegalStateException e) {
+        } catch (Exception e) {
             emitterActive.set(false);
             return false;
         }
@@ -585,30 +635,47 @@ public class ChatController {
         }
     }
 
-    @Nullable
-    private String generateTitle(String userInput) {
+    private void disposeQuietly(@Nullable Disposable disposable) {
+        if (disposable != null && !disposable.isDisposed()) {
+            disposable.dispose();
+        }
+    }
+
+    private void completeQuietly(SseEmitter emitter) {
         try {
-            return ChatClient
-                    .create(chatModel)
-                    .prompt()
-                    .system("Generate a very short and concise title (maximum 5 words) for a conversation that starts with the following message. Respond ONLY with the title, without quotes or extra punctuation. Use the same language as the user's message.")
-                    .user(userInput)
-                    .call()
-                    .content();
-        } catch (Exception e) {
-            return null;
+            emitter.complete();
+        } catch (IllegalStateException ignored) {
         }
     }
 
     private String normalizeTitle(@Nullable String title, String fallback) {
         if (title == null || title.isBlank()) {
-            title = fallback;
+            title = generateTitle(fallback);
         }
-        title = title.replaceAll("^[\"']|[\"']$", "");
+        title = title.replaceAll("^[\"']|[\"']$", "").trim();
         if (title.length() > 100) {
             title = title.substring(0, 97) + "...";
         }
-        return title.trim();
+        return title;
+    }
+
+    /**
+     * Cheap, deterministic title generation. The previous implementation made an
+     * extra blocking LLM call for every new conversation.
+     */
+    private String generateTitle(String userInput) {
+        String cleaned = userInput == null ?
+                "" :
+                userInput.strip().replaceAll("\\s+", " ");
+        if (cleaned.isEmpty()) {
+            return "New conversation";
+        }
+        int end = Math.min(cleaned.length(), 60);
+        int lastSpace = cleaned.lastIndexOf(' ', end);
+        if (lastSpace > 20) {
+            end = lastSpace;
+        }
+        return cleaned.substring(0, end).trim();
     }
 
     private void sendErrorAndComplete(SseEmitter emitter, AtomicBoolean emitterActive, Throwable error) {
@@ -617,5 +684,6 @@ public class ChatController {
                 "Error generating response";
         trySendEvent(emitter, emitterActive, SseEmitter.event().name("error").data(message));
         tryComplete(emitter, emitterActive);
+        completeQuietly(emitter);
     }
 }

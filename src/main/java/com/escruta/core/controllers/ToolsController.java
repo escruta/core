@@ -5,6 +5,7 @@ import com.escruta.core.dtos.tools.GenerationRequest;
 import com.escruta.core.dtos.tools.JobStartedResponse;
 import com.escruta.core.entities.GenerationJob;
 import com.escruta.core.entities.User;
+import com.escruta.core.services.RateLimitService;
 import com.escruta.core.services.ToolsGenerationService;
 import com.escruta.core.services.UserService;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ import java.util.UUID;
 public class ToolsController {
     private final ToolsGenerationService generationService;
     private final UserService userService;
+    private final RateLimitService rateLimitService;
 
     @PostMapping("generate")
     public ResponseEntity<JobStartedResponse> startGeneration(
@@ -34,6 +36,8 @@ public class ToolsController {
         if (user == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated");
         }
+
+        rateLimitService.checkChatRequest(user.getId());
 
         try {
             GenerationJob job = generationService.createJob(notebookId, user, request.type());
@@ -65,14 +69,18 @@ public class ToolsController {
     }
 
     @GetMapping("jobs")
-    public ResponseEntity<List<GenerationJobResponse>> getAllJobs(@PathVariable UUID notebookId) {
+    public ResponseEntity<List<GenerationJobResponse>> getAllJobs(
+            @PathVariable UUID notebookId,
+            @RequestParam(defaultValue = "100") int limit,
+            @RequestParam(defaultValue = "0") int offset
+    ) {
         User user = userService.getCurrentUser();
         if (user == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated");
         }
 
         List<GenerationJobResponse> jobs = generationService
-                .getJobsForNotebook(notebookId, user.getId())
+                .getJobsForNotebook(notebookId, user.getId(), limit, offset)
                 .stream()
                 .map(GenerationJobResponse::from)
                 .toList();

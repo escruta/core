@@ -11,15 +11,16 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class SourceMapper {
+    private static final java.util.regex.Pattern YOUTUBE_URL = java.util.regex.Pattern.compile(
+            "(?i)^(https?://)?([a-z0-9-]+\\.)?(youtube\\.com/(watch\\?.*v=|embed/|v/|shorts/|live/)|youtu\\.be/)[a-zA-Z0-9_-]{11}.*$"
+    );
+
     public Source toSource(SourceCreationDTO dto, Notebook notebook, String content) {
         Source source = new Source();
         source.setNotebook(notebook);
         source.setLink(dto.link());
         source.setContent(content);
-        if (dto.link() != null && dto
-                .link()
-                .matches(
-                        "(?i)^(https?://)?([a-z0-9-]+\\.)?(youtube\\.com/(watch\\?.*v=|embed/|v/|shorts/|live/)|youtu\\.be/)[a-zA-Z0-9_-]{11}.*$")) {
+        if (dto.link() != null && YOUTUBE_URL.matcher(dto.link()).matches()) {
             source.setType(SourceType.YOUTUBE_VIDEO);
         } else {
             source.setType(SourceType.WEBSITE);

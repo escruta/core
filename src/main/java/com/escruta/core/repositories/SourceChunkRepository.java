@@ -3,6 +3,7 @@ package com.escruta.core.repositories;
 import com.escruta.core.entities.SourceChunk;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
@@ -11,7 +12,10 @@ import java.util.UUID;
 
 @Repository
 public interface SourceChunkRepository extends JpaRepository<SourceChunk, UUID> {
-    void deleteBySourceId(UUID sourceId);
+    @org.springframework.transaction.annotation.Transactional
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from SourceChunk c where c.sourceId = :sourceId")
+    void deleteAllBySourceId(UUID sourceId);
 
     List<SourceChunk> findByNotebookIdOrderByChunkIndexAsc(UUID notebookId, Pageable pageable);
 

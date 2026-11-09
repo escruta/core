@@ -69,11 +69,11 @@ class UserServiceTest {
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getPrincipal()).thenReturn(principal);
         when(principal.getAttribute("sub")).thenReturn(user.getId().toString());
-        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
 
         UUID result = userService.getUserId();
 
         assertThat(result).isEqualTo(userId);
+        verify(userRepository, never()).findById(any());
     }
 
     @Test

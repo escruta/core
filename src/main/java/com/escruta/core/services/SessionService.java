@@ -8,7 +8,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
@@ -21,7 +20,6 @@ public class SessionService {
     private final TokenService tokenService;
     private final UserService userService;
 
-    @Transactional(readOnly = true)
     public List<SessionResponseDTO> getSessions() {
         UUID userId = requireUserId();
         String currentSessionId = getCurrentSessionId();
@@ -43,13 +41,11 @@ public class SessionService {
                 .toList();
     }
 
-    @Transactional
     public boolean revokeSession(String sessionId) {
         UUID userId = requireUserId();
         return tokenService.revokeSession(userId, sessionId);
     }
 
-    @Transactional
     public int revokeOtherSessions() {
         UUID userId = requireUserId();
         String currentSessionId = getCurrentSessionId();

@@ -5,6 +5,7 @@ import com.escruta.core.dtos.SearchResponse;
 import com.escruta.core.dtos.SearchResult;
 import com.escruta.core.repositories.SourceRepository;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,6 +27,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 @Service
@@ -33,6 +36,10 @@ import java.util.stream.Collectors;
 public class HelperService {
     private final RestClient.Builder restClientBuilder;
     private final SourceRepository sourceRepository;
+    private final ExecutorService httpExecutor = Executors.newThreadPerTaskExecutor(Thread
+            .ofVirtual()
+            .name("helper-http-", 0)
+            .factory());
     private RestClient restClient;
 
     @Value("${services.helper.base-url}")
@@ -43,11 +50,20 @@ public class HelperService {
 
     @PostConstruct
     public void init() {
-        var httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
-        this.restClient = restClientBuilder
-                .baseUrl(baseUrl)
-                .requestFactory(new JdkClientHttpRequestFactory(httpClient))
+        var httpClient = HttpClient
+                .newBuilder()
+                .executor(httpExecutor)
+                .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(java.time.Duration.ofSeconds(5))
                 .build();
+        var requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        requestFactory.setReadTimeout(java.time.Duration.ofSeconds(120));
+        this.restClient = restClientBuilder.baseUrl(baseUrl).requestFactory(requestFactory).build();
+    }
+
+    @PreDestroy
+    public void shutdown() {
+        httpExecutor.shutdown();
     }
 
     public SearchResponse search(String query, int maxResults, UUID notebookId) {
@@ -74,10 +90,15 @@ public class HelperService {
         return new SearchResponse(filtered);
     }
 
+    private static final java.util.regex.Pattern URL_SCHEME_AND_WWW = java.util.regex.Pattern.compile(
+            "^(https?://)?(www\\.)?");
+    private static final java.util.regex.Pattern URL_TRAILING_SLASHES = java.util.regex.Pattern.compile("/+$");
+
     private static String normalizeUrl(String url) {
         if (url == null)
             return "";
-        return url.trim().replaceFirst("^(https?://)?(www\\.)?", "").replaceAll("/+$", "").toLowerCase(Locale.ROOT);
+        String withoutScheme = URL_SCHEME_AND_WWW.matcher(url.trim()).replaceFirst("");
+        return URL_TRAILING_SLASHES.matcher(withoutScheme).replaceAll("").toLowerCase(Locale.ROOT);
     }
 
     public ExtractorResponse extractMarkdown(File file, String filename) {

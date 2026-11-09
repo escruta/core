@@ -14,10 +14,20 @@ WORKDIR /application
 COPY --from=builder /builder/build/libs/*.jar core.jar
 
 RUN java --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow \
+    -XX:+UseCompactObjectHeaders \
     -XX:AOTCacheOutput=app.aot \
     -Dspring.context.exit=onRefresh \
     -Dspring.jpa.hibernate.ddl-auto=none \
     -jar core.jar
 
 EXPOSE 8080
-ENTRYPOINT ["java", "--enable-native-access=ALL-UNNAMED", "--sun-misc-unsafe-memory-access=allow", "-XX:AOTCache=app.aot", "-jar", "core.jar"]
+ENTRYPOINT ["java", \
+    "--enable-native-access=ALL-UNNAMED", \
+    "--sun-misc-unsafe-memory-access=allow", \
+    "-XX:+UseCompactObjectHeaders", \
+    "-XX:MaxRAMPercentage=75", \
+    "-XX:+ExitOnOutOfMemoryError", \
+    "-XX:+HeapDumpOnOutOfMemoryError", \
+    "-XX:HeapDumpPath=/tmp", \
+    "-XX:AOTCache=app.aot", \
+    "-jar", "core.jar"]

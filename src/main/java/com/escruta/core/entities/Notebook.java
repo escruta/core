@@ -5,7 +5,9 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.UuidGenerator;
 
 import java.sql.Timestamp;
 import java.util.List;
@@ -15,18 +17,20 @@ import java.util.UUID;
 @Setter
 @Table(name = "notebooks")
 @Entity
+@DynamicUpdate
 @RequiredArgsConstructor
 public class Notebook {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @GeneratedValue
+    @UuidGenerator(style = UuidGenerator.Style.TIME)
     @Column(nullable = false)
     private UUID id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(nullable = false)
     private User user;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn()
     private Folder folder;
 
@@ -42,19 +46,19 @@ public class Notebook {
     @Column(columnDefinition = "TEXT")
     private String summaryTopics;
 
-    @OneToMany(mappedBy = "notebook", cascade = CascadeType.REMOVE, orphanRemoval = true)
+    @OneToMany(mappedBy = "notebook")
     private List<Source> sources;
 
-    @OneToMany(mappedBy = "notebook", cascade = CascadeType.REMOVE, orphanRemoval = true)
+    @OneToMany(mappedBy = "notebook")
     private List<SourceGroup> sourceGroups;
 
-    @OneToMany(mappedBy = "notebook", cascade = CascadeType.REMOVE, orphanRemoval = true)
+    @OneToMany(mappedBy = "notebook")
     private List<Note> notes;
 
-    @OneToMany(mappedBy = "notebook", cascade = CascadeType.REMOVE, orphanRemoval = true)
+    @OneToMany(mappedBy = "notebook")
     private List<GenerationJob> generationJobs;
 
-    @OneToMany(mappedBy = "notebook", cascade = CascadeType.REMOVE, orphanRemoval = true)
+    @OneToMany(mappedBy = "notebook")
     private List<Conversation> conversations;
 
     @Version

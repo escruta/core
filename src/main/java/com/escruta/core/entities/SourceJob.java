@@ -5,7 +5,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.UuidGenerator;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -14,18 +16,20 @@ import java.util.UUID;
 @Setter
 @Table(name = "source_jobs")
 @Entity
+@DynamicUpdate
 @NoArgsConstructor
 public class SourceJob {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @GeneratedValue
+    @UuidGenerator(style = UuidGenerator.Style.TIME)
     @Column(nullable = false)
     private UUID id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "source_id")
     private Source source;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "notebook_id")
     private Notebook notebook;
 
@@ -49,6 +53,10 @@ public class SourceJob {
     @Column(name = "file_name")
     private String fileName;
 
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     @CreationTimestamp
     @Column(updatable = false)
     private Instant createdAt;
@@ -62,10 +70,6 @@ public class SourceJob {
         this.source = source;
         this.notebook = notebook;
         this.type = type;
-    }
-
-    public void markAsProcessing() {
-        this.status = JobStatus.PROCESSING;
     }
 
     public void markAsCompleted(String result) {

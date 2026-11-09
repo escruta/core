@@ -2,6 +2,7 @@ package com.escruta.core.configs;
 
 import com.escruta.core.services.TokenService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -32,6 +33,7 @@ import java.util.*;
 @EnableWebSecurity
 @EnableMethodSecurity
 @RequiredArgsConstructor
+@Slf4j
 public class SecurityConfiguration {
     private final TokenService tokenService;
 
@@ -55,6 +57,8 @@ public class SecurityConfiguration {
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/")
                         .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/actuator/health/**", "/actuator/info")
+                        .permitAll()
                         .anyRequest()
                         .authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
@@ -72,7 +76,7 @@ public class SecurityConfiguration {
     public BearerTokenResolver bearerTokenResolver() {
         return request -> {
             String header = request.getHeader(HttpHeaders.AUTHORIZATION);
-            if (header != null && header.toLowerCase().startsWith("bearer ")) {
+            if (header != null && header.regionMatches(true, 0, "Bearer ", 0, 7)) {
                 return header.substring(7).trim();
             }
             return null;
@@ -113,7 +117,13 @@ public class SecurityConfiguration {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        List<String> origins = Arrays.asList(allowedOrigins.split(","));
+        List<String> origins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toList();
+        if (origins.contains("*")) {
+            log.warn("CORS allowedOrigins contains '*'; restrict ESCRUTA_CORS_ALLOWED_ORIGINS in production");
+        }
         configuration.setAllowedOriginPatterns(origins);
 
         List<String> methods = Arrays.asList(allowedMethods.split(","));

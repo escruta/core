@@ -2,6 +2,8 @@ package com.escruta.core.services;
 
 import com.escruta.core.entities.SourceChunk;
 import com.escruta.core.repositories.SourceChunkRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,19 +18,23 @@ public class AsyncChunkIndexingService {
     private static final int CHUNK_SIZE = 2000;
     private static final int CHUNK_OVERLAP = 200;
     private static final int MAX_CHUNKS = 10000;
+    private static final int BATCH_SIZE = 500;
 
     private final SourceChunkRepository chunkRepository;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     @Transactional
     public void indexSource(UUID notebookId, UUID sourceId, String title, String link, String content) {
-        chunkRepository.deleteBySourceId(sourceId);
+        chunkRepository.deleteAllBySourceId(sourceId);
 
         if (content == null || content.isBlank()) {
             return;
         }
 
         List<String> parts = split(content);
-        List<SourceChunk> chunks = new ArrayList<>();
+        List<SourceChunk> batch = new ArrayList<>(Math.min(parts.size(), BATCH_SIZE));
         for (int i = 0; i < parts.size(); i++) {
             SourceChunk chunk = new SourceChunk();
             chunk.setSourceId(sourceId);
@@ -39,11 +45,18 @@ public class AsyncChunkIndexingService {
                     "Untitled");
             chunk.setLink(link);
             chunk.setContent(parts.get(i));
-            chunks.add(chunk);
+            batch.add(chunk);
+
+            if (batch.size() == BATCH_SIZE) {
+                chunkRepository.saveAll(batch);
+                chunkRepository.flush();
+                entityManager.clear();
+                batch = new ArrayList<>(Math.min(parts.size() - i, BATCH_SIZE));
+            }
         }
 
-        if (!chunks.isEmpty()) {
-            chunkRepository.saveAll(chunks);
+        if (!batch.isEmpty()) {
+            chunkRepository.saveAll(batch);
         }
     }
 

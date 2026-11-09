@@ -6,7 +6,6 @@ import com.escruta.core.dtos.notebook.NotebookResponseDTO;
 import com.escruta.core.dtos.notebook.NotebookUpdateDTO;
 import com.escruta.core.dtos.notebook.NotebookWithDetailsDTO;
 import com.escruta.core.entities.Notebook;
-import com.escruta.core.entities.Source;
 import com.escruta.core.entities.User;
 import com.escruta.core.mappers.NotebookMapper;
 import com.escruta.core.repositories.NotebookRepository;
@@ -58,7 +57,10 @@ class NotebookServiceTest {
         Notebook notebook2 = createNotebook(UUID.randomUUID(), "Notebook 2", user);
 
         when(userService.getUserId()).thenReturn(USER_ID);
-        when(notebookRepository.findByUserId(USER_ID)).thenReturn(Arrays.asList(notebook1, notebook2));
+        when(notebookRepository.findResponsesByUserId(USER_ID)).thenReturn(Arrays.asList(
+                new NotebookResponseDTO(
+                        notebook1), new NotebookResponseDTO(notebook2)
+        ));
 
         List<NotebookResponseDTO> result = notebookService.getAllUserNotebooks();
 
@@ -71,7 +73,7 @@ class NotebookServiceTest {
     @DisplayName("Should return empty list when user has no notebooks")
     void getAllUserNotebooks_shouldReturnEmptyListWhenNoNotebooks() {
         when(userService.getUserId()).thenReturn(USER_ID);
-        when(notebookRepository.findByUserId(USER_ID)).thenReturn(List.of());
+        when(notebookRepository.findResponsesByUserId(USER_ID)).thenReturn(List.of());
 
         List<NotebookResponseDTO> result = notebookService.getAllUserNotebooks();
 
@@ -84,11 +86,10 @@ class NotebookServiceTest {
         User user = createUser();
         Notebook notebook = createNotebook(NOTEBOOK_ID, "Test Notebook", user);
         List<NoteResponseDTO> notes = List.of();
-        List<Source> sources = List.of();
 
         when(notebookRepository.findById(NOTEBOOK_ID)).thenReturn(Optional.of(notebook));
         when(noteService.getNotes(NOTEBOOK_ID)).thenReturn(notes);
-        when(sourceRepository.findByNotebookId(NOTEBOOK_ID)).thenReturn(sources);
+        when(sourceRepository.findSummariesByNotebookId(NOTEBOOK_ID)).thenReturn(List.of());
 
         Optional<NotebookWithDetailsDTO> result = notebookService.getUserNotebookWithDetails(NOTEBOOK_ID);
 

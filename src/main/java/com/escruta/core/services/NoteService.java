@@ -11,6 +11,7 @@ import com.escruta.core.repositories.NoteRepository;
 import com.escruta.core.repositories.NotebookRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -25,30 +26,40 @@ public class NoteService {
     private final NoteMapper noteMapper;
 
     public List<NoteResponseDTO> getNotes(UUID notebookId) {
-        var currentUser = userService.getCurrentUser();
-        if (currentUser == null)
+        UUID userId = userService.getUserId();
+        if (userId == null)
             return List.of();
 
         if (notebookId != null) {
             return noteRepository
-                    .findByNotebookIdAndNotebook_UserId(notebookId, currentUser.getId())
+                    .findByNotebookIdAndNotebook_UserId(notebookId, userId)
                     .stream()
                     .map(NoteResponseDTO::new)
                     .toList();
         }
-        return noteRepository.findByNotebook_UserId(currentUser.getId()).stream().map(NoteResponseDTO::new).toList();
+        return noteRepository.findByNotebook_UserId(userId).stream().map(NoteResponseDTO::new).toList();
     }
 
     public NoteWithContentDTO getNote(UUID noteId) {
-        Optional<Note> note = noteRepository.findById(noteId);
+        UUID userId = userService.getUserId();
+        if (userId == null) {
+            return null;
+        }
+        Optional<Note> note = noteRepository.findByIdAndNotebook_UserId(noteId, userId);
         return note.map(NoteWithContentDTO::new).orElse(null);
     }
 
+    @Transactional
     public NoteResponseDTO addNote(NoteCreationDTO newNoteDto) {
         if (newNoteDto.notebookId() == null)
             return null;
 
-        Optional<Notebook> notebookOptional = notebookRepository.findById(newNoteDto.notebookId());
+        UUID userId = userService.getUserId();
+        if (userId == null) {
+            return null;
+        }
+
+        Optional<Notebook> notebookOptional = notebookRepository.findByIdAndUserId(newNoteDto.notebookId(), userId);
         if (notebookOptional.isEmpty())
             return null;
 
@@ -58,8 +69,17 @@ public class NoteService {
         return new NoteResponseDTO(note);
     }
 
+    @Transactional
     public NoteResponseDTO updateNote(NoteUpdateDTO newNoteDto) {
-        Optional<Note> noteOptional = noteRepository.findById(UUID.fromString(newNoteDto.id()));
+        UUID userId = userService.getUserId();
+        if (userId == null) {
+            return null;
+        }
+
+        Optional<Note> noteOptional = noteRepository.findByIdAndNotebook_UserId(
+                UUID.fromString(newNoteDto.id()),
+                userId
+        );
         if (noteOptional.isPresent()) {
             Note note = noteOptional.get();
             UUID notebookId = note.getNotebook().getId();
@@ -71,8 +91,14 @@ public class NoteService {
         return null;
     }
 
+    @Transactional
     public NoteResponseDTO deleteNote(UUID noteId) {
-        Optional<Note> noteOptional = noteRepository.findById(noteId);
+        UUID userId = userService.getUserId();
+        if (userId == null) {
+            return null;
+        }
+
+        Optional<Note> noteOptional = noteRepository.findByIdAndNotebook_UserId(noteId, userId);
         if (noteOptional.isPresent()) {
             Note note = noteOptional.get();
             UUID notebookId = note.getNotebook().getId();

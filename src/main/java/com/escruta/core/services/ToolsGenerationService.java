@@ -11,37 +11,53 @@ import com.escruta.core.entities.Notebook;
 import com.escruta.core.entities.User;
 import com.escruta.core.repositories.GenerationJobRepository;
 import com.escruta.core.repositories.NotebookRepository;
+import jakarta.annotation.PostConstruct;
 import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.document.Document;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
 
 @Service
 @RequiredArgsConstructor
 public class ToolsGenerationService {
     private final GenerationJobRepository jobRepository;
     private final NotebookRepository notebookRepository;
-    private final RetrievalService retrievalService;
-    private final SourceService sourceService;
+    private final NotebookContextService notebookContextService;
     private final SseNotificationService sseNotificationService;
     private final ChatModel chatModel;
     private final ObjectMapper objectMapper;
+    private final PlatformTransactionManager transactionManager;
+
+    @Value("${services.jobs.max-concurrency:10}")
+    private int maxConcurrency;
+
+    private TransactionTemplate transactionTemplate;
+    private Semaphore jobSlots;
+    private ChatClient chatClient;
+
+    @PostConstruct
+    public void init() {
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.jobSlots = new Semaphore(Math.max(1, maxConcurrency));
+        this.chatClient = ChatClient.create(chatModel);
+    }
 
     @Transactional
     public GenerationJob createJob(UUID notebookId, User user, JobType type) {
-        Notebook notebook = notebookRepository
-                .findById(notebookId)
-                .orElseThrow(() -> new IllegalArgumentException("Notebook not found"));
+        Notebook notebook = notebookRepository.getReferenceById(notebookId);
 
         boolean hasActiveJob = jobRepository.existsByNotebookIdAndUserIdAndTypeAndStatusIn(
                 notebookId,
@@ -64,8 +80,18 @@ public class ToolsGenerationService {
         return jobRepository.findByIdAndUserId(jobId, userId);
     }
 
-    public List<GenerationJob> getJobsForNotebook(UUID notebookId, UUID userId) {
-        return jobRepository.findByNotebookIdAndUserIdOrderByCreatedAtDesc(notebookId, userId);
+    public List<GenerationJob> getJobsForNotebook(UUID notebookId, UUID userId, int limit, int offset) {
+        int boundedLimit = Math.max(1, Math.min(limit, 100));
+        long boundedOffset = Math.max(0, offset);
+        return jobRepository.findByNotebookIdAndUserIdOrderByCreatedAtDesc(
+                notebookId,
+                userId,
+                new com.escruta.core.repositories.OffsetPageRequest(
+                        boundedOffset,
+                        boundedLimit,
+                        org.springframework.data.domain.Sort.unsorted()
+                )
+        );
     }
 
     public Optional<GenerationJob> getLatestCompletedJob(UUID notebookId, UUID userId, JobType type) {
@@ -82,42 +108,59 @@ public class ToolsGenerationService {
     }
 
     @Async
-    @Transactional
     public void processJob(UUID jobId) {
-        GenerationJob job = jobRepository.findById(jobId).orElse(null);
-        if (job == null) {
+        try {
+            jobSlots.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             return;
         }
 
-        UUID userId = job.getUser().getId();
-
         try {
-            job.markAsProcessing();
-            jobRepository.save(job);
+            if (jobRepository.claimPending(jobId) == 0) {
+                return;
+            }
 
-            String result = generateContent(job);
+            GenerationJob job = jobRepository.findById(jobId).orElse(null);
+            if (job == null) {
+                return;
+            }
 
-            job.markAsCompleted(result);
-            jobRepository.save(job);
-        } catch (Exception e) {
-            job.markAsFailed(e.getMessage());
-            jobRepository.save(job);
+            UUID userId = jobRepository.findUserIdById(jobId).orElse(null);
+            UUID notebookId = jobRepository.findNotebookIdById(jobId).orElse(null);
+            if (userId == null || notebookId == null) {
+                return;
+            }
+            try {
+                String result = generateContent(job, notebookId);
+                transactionTemplate.executeWithoutResult(_ -> {
+                    job.markAsCompleted(result);
+                    jobRepository.save(job);
+                });
+            } catch (Exception e) {
+                transactionTemplate.executeWithoutResult(_ -> {
+                    job.markAsFailed(e.getMessage());
+                    jobRepository.save(job);
+                });
+            }
+
+            notebookRepository.touchLastActivity(notebookId);
+            publishEvent(job, userId, notebookId);
+        } finally {
+            jobSlots.release();
         }
-
-        notebookRepository.touchLastActivity(job.getNotebook().getId());
-        publishEvent(job, userId);
     }
 
-    private void publishEvent(GenerationJob job, UUID userId) {
+    private void publishEvent(GenerationJob job, UUID userId, UUID notebookId) {
         if (userId == null) {
             return;
         }
-        sseNotificationService.publish(userId, "tool.updated", toolEventPayload(job));
+        sseNotificationService.publish(userId, "tool.updated", toolEventPayload(job, notebookId));
     }
 
-    private Map<String, Object> toolEventPayload(GenerationJob job) {
+    private Map<String, Object> toolEventPayload(GenerationJob job, UUID notebookId) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("notebookId", job.getNotebook().getId().toString());
+        payload.put("notebookId", notebookId.toString());
         payload.put("jobId", job.getId().toString());
         payload.put("type", job.getType().toString());
         payload.put("status", job.getStatus().toString());
@@ -148,25 +191,11 @@ public class ToolsGenerationService {
         return payload;
     }
 
-    private String generateContent(GenerationJob job) {
-        UUID notebookId = job.getNotebook().getId();
-
-        if (sourceService.hasNoSources(notebookId)) {
-            throw new IllegalStateException("No sources available in this notebook");
+    private String generateContent(GenerationJob job, UUID notebookId) {
+        String context = notebookContextService.getContext(notebookId, 30);
+        if (context.isBlank()) {
+            throw new IllegalStateException("No sources available or content not yet indexed");
         }
-
-        String query = "core concepts key ideas summary main topic definitions principles overview";
-        List<Document> documents = retrievalService.getDocumentsForNotebook(notebookId, query, 30);
-        if (documents.isEmpty()) {
-            throw new IllegalStateException("Content not yet indexed");
-        }
-
-        String context = documents
-                .stream()
-                .map(Document::getText)
-                .filter(text -> text != null && !text.isBlank())
-                .reduce((a, b) -> a + "\n\n" + b)
-                .orElseThrow(() -> new IllegalStateException("No content available"));
 
         return switch (job.getType()) {
             case STUDY_GUIDE -> generateStudyGuide(context);
@@ -177,8 +206,7 @@ public class ToolsGenerationService {
     }
 
     private String generateStudyGuide(String context) {
-        StudyGuideResponse response = ChatClient
-                .create(chatModel)
+        StudyGuideResponse response = chatClient
                 .prompt()
                 .system("""
                         You are an expert educator. Your task is to analyze the provided materials and create a comprehensive study guide.
@@ -201,8 +229,7 @@ public class ToolsGenerationService {
     }
 
     private String generateFlashcards(String context) {
-        FlashcardsResponse response = ChatClient
-                .create(chatModel)
+        FlashcardsResponse response = chatClient
                 .prompt()
                 .system("""
                         You are an expert educator. Analyze the provided materials to identify the **CORE CONCEPTS** and **KEY DEFINITIONS**.
@@ -222,8 +249,7 @@ public class ToolsGenerationService {
     }
 
     private String generateQuestionnaire(String context) {
-        QuestionnaireResponse response = ChatClient
-                .create(chatModel)
+        QuestionnaireResponse response = chatClient
                 .prompt()
                 .system("""
                         You are an expert educator. Analyze the provided materials to identify the **CENTRAL THEME**.
@@ -250,8 +276,7 @@ public class ToolsGenerationService {
     }
 
     private String generateMindMap(String context) {
-        MindMapResponse response = ChatClient
-                .create(chatModel)
+        MindMapResponse response = chatClient
                 .prompt()
                 .system("""
                         You are an expert at creating mind maps. Analyze the provided materials to identify the **CORE ESSENCE** and logical structure.

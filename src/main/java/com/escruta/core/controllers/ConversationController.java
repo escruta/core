@@ -6,11 +6,19 @@ import com.escruta.core.dtos.conversation.ConversationsPageResponse;
 import com.escruta.core.entities.ChatMessage;
 import com.escruta.core.entities.Conversation;
 import com.escruta.core.repositories.ConversationRepository;
+import com.escruta.core.repositories.OffsetPageRequest;
 import com.escruta.core.services.ChatMessageService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.UUID;
@@ -29,17 +37,21 @@ class ConversationController {
             @RequestParam(defaultValue = "0") int offset,
             @RequestParam(required = false) String search
     ) {
-        var pageable = PageRequest.of(offset / limit, limit);
+        int boundedLimit = Math.max(1, Math.min(limit, 100));
+        long boundedOffset = Math.max(0, offset);
+        var pageable = new OffsetPageRequest(boundedOffset, boundedLimit, Sort.unsorted());
 
         List<Conversation> conversations;
         long total;
 
         if (search != null && !search.isBlank()) {
-            conversations = conversationRepository.findByNotebookIdAndTitleContainingIgnoreCaseOrderByUpdatedAtDesc(notebookId,
-                    search.trim(),
+            String term = search.trim();
+            conversations = conversationRepository.findByNotebookIdAndTitleContainingIgnoreCaseOrderByUpdatedAtDesc(
+                    notebookId,
+                    term,
                     pageable
             );
-            total = conversationRepository.countByNotebookIdAndTitleContainingIgnoreCase(notebookId, search.trim());
+            total = conversationRepository.countByNotebookIdAndTitleContainingIgnoreCase(notebookId, term);
         } else {
             conversations = conversationRepository.findByNotebookIdOrderByUpdatedAtDesc(notebookId, pageable);
             total = conversationRepository.countByNotebookId(notebookId);
@@ -55,7 +67,7 @@ class ConversationController {
                 c.getUpdatedAt()
         )).toList();
 
-        boolean hasMore = (offset + conversations.size()) < total;
+        boolean hasMore = (boundedOffset + conversations.size()) < total;
 
         return ResponseEntity.ok(new ConversationsPageResponse(response, total, hasMore));
     }
@@ -65,9 +77,9 @@ class ConversationController {
             @PathVariable UUID notebookId,
             @PathVariable String conversationId
     ) {
-        var conversation = conversationRepository.findById(conversationId).orElse(null);
+        var conversation = conversationRepository.findByIdAndNotebookId(conversationId, notebookId).orElse(null);
 
-        if (conversation == null || !conversation.getNotebook().getId().equals(notebookId)) {
+        if (conversation == null) {
             return ResponseEntity.notFound().build();
         }
 
@@ -94,9 +106,9 @@ class ConversationController {
 
     @PatchMapping("/{conversationId}/seen")
     ResponseEntity<Void> markConversationAsSeen(@PathVariable UUID notebookId, @PathVariable String conversationId) {
-        var conversation = conversationRepository.findById(conversationId).orElse(null);
+        var conversation = conversationRepository.findByIdAndNotebookId(conversationId, notebookId).orElse(null);
 
-        if (conversation == null || !conversation.getNotebook().getId().equals(notebookId)) {
+        if (conversation == null) {
             return ResponseEntity.notFound().build();
         }
 
@@ -109,10 +121,11 @@ class ConversationController {
     }
 
     @DeleteMapping("/{conversationId}")
+    @Transactional
     ResponseEntity<Void> deleteConversation(@PathVariable UUID notebookId, @PathVariable String conversationId) {
-        var conversation = conversationRepository.findById(conversationId).orElse(null);
+        var conversation = conversationRepository.findByIdAndNotebookId(conversationId, notebookId).orElse(null);
 
-        if (conversation == null || !conversation.getNotebook().getId().equals(notebookId)) {
+        if (conversation == null) {
             return ResponseEntity.notFound().build();
         }
 

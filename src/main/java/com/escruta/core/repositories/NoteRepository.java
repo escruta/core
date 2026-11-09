@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -12,4 +13,6 @@ public interface NoteRepository extends JpaRepository<Note, UUID> {
     List<Note> findByNotebookIdAndNotebook_UserId(UUID notebookId, UUID userId);
 
     List<Note> findByNotebook_UserId(UUID userId);
+
+    Optional<Note> findByIdAndNotebook_UserId(UUID id, UUID userId);
 }

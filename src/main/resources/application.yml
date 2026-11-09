@@ -1,8 +1,20 @@
 server:
   port: ${ESCRUTA_PORT:${PORT:8080}}
+  shutdown: graceful
+  compression:
+    enabled: true
+    mime-types: application/json,text/html,text/plain,text/css,application/javascript
+    min-response-size: 1024
 spring:
   application:
     name: Escruta Core
+  threads:
+    virtual:
+      enabled: ${ESCRUTA_VIRTUAL_THREADS:true}
+  main:
+    keep-alive: true
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   web:
     resources:
       add-mappings: true
@@ -12,11 +24,20 @@ spring:
       max-request-size: 50MB
       enabled: true
   datasource:
-    url: ${ESCRUTA_DB_URL:jdbc:mariadb://localhost:3306/escruta}
+    url: ${ESCRUTA_DB_URL:jdbc:mariadb://localhost:3306/escruta?rewriteBatchedStatements=true&cachePrepStmts=true&useServerPrepStmts=true}
     username: ${ESCRUTA_DB_USER:root}
     password: ${ESCRUTA_DB_PASSWORD:1234}
     hikari:
       initialization-fail-timeout: -1
+      maximum-pool-size: ${ESCRUTA_DB_POOL_SIZE:15}
+      minimum-idle: 5
+      connection-timeout: 5000
+      validation-timeout: 2000
+      max-lifetime: 1800000
+      data-source-properties:
+        rewriteBatchedStatements: true
+        cachePrepStmts: true
+        useServerPrepStmts: true
   sql:
     init:
       mode: never
@@ -29,11 +50,24 @@ spring:
       hibernate:
         boot:
           allow_jdbc_metadata_access: false
+        jdbc:
+          batch_size: 50
+          order_inserts: true
+          order_updates: true
+          batch_versioned_data: true
+  http:
+    clients:
+      connect-timeout: 5s
+      read-timeout: 120s
+  cache:
+    type: caffeine
   data:
     redis:
       host: ${ESCRUTA_KV_HOST:localhost}
       port: ${ESCRUTA_KV_PORT:6379}
       password: ${ESCRUTA_KV_PASSWORD:}
+      timeout: 2s
+      connect-timeout: 2s
   mail:
     host: ${ESCRUTA_MAIL_HOST:}
     port: ${ESCRUTA_MAIL_PORT:587}
@@ -68,13 +102,39 @@ security:
     max-attempts: ${ESCRUTA_AUTH_CODE_MAX_ATTEMPTS:5}
     verification-token-ttl-seconds: ${ESCRUTA_AUTH_VERIFICATION_TOKEN_TTL_SECONDS:900}
   cors:
-    allowedOrigins: ${ESCRUTA_CORS_ALLOWED_ORIGINS:*}
+    allowedOrigins: ${ESCRUTA_CORS_ALLOWED_ORIGINS:http://localhost:5173}
     allowedMethods: GET,POST,PUT,PATCH,DELETE,OPTIONS
     allowedHeaders: Authorization,Content-Type
     allowCredentials: true
 services:
+  mail:
+    log-code: ${ESCRUTA_MAIL_LOG_CODE:true}
   helper:
     base-url: ${ESCRUTA_HELPER_URL:http://localhost:8000}
     api-key: ${ESCRUTA_HELPER_API_KEY:}
   source-uploads:
     dir: ${ESCRUTA_UPLOADS_DIR:${java.io.tmpdir}/escruta-uploads}
+  jobs:
+    max-concurrency: ${ESCRUTA_JOBS_MAX_CONCURRENCY:10}
+  rate-limit:
+    enabled: ${ESCRUTA_RATE_LIMIT_ENABLED:true}
+    auth-requests-per-window: ${ESCRUTA_RATE_LIMIT_AUTH:10}
+    chat-requests-per-window: ${ESCRUTA_RATE_LIMIT_CHAT:30}
+    window-seconds: ${ESCRUTA_RATE_LIMIT_WINDOW:60}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+    tags:
+      application: escruta-core

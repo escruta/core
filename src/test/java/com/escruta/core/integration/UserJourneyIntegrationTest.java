@@ -1,5 +1,6 @@
 package com.escruta.core.integration;
 
+import com.escruta.core.dtos.ChatRequest;
 import com.escruta.core.dtos.CompleteRegistrationRequest;
 import com.escruta.core.dtos.RequestEmailCodeRequest;
 import com.escruta.core.dtos.VerifyEmailCodeRequest;
@@ -10,6 +11,13 @@ import tools.jackson.databind.ObjectMapper;
 import jakarta.servlet.Filter;
 import org.junit.jupiter.api.*;
 import org.mockito.ArgumentCaptor;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.chat.prompt.Prompt;
+import reactor.core.publisher.Flux;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -20,8 +28,12 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -40,6 +52,9 @@ class UserJourneyIntegrationTest {
     @MockitoBean
     private EmailService emailService;
 
+    @Autowired
+    private ChatModel chatModel;
+
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -50,6 +65,7 @@ class UserJourneyIntegrationTest {
 
     private static String authToken;
     private static String userEmail;
+    private static String notebookId;
 
     private String requestCodeAndCapture(String email) throws Exception {
         mockMvc
@@ -134,13 +150,16 @@ class UserJourneyIntegrationTest {
     void step4_createNotebook() throws Exception {
         NotebookCreationDTO dto = new NotebookCreationDTO("📓", "My First Notebook", null);
 
-        mockMvc
+        MvcResult result = mockMvc
                 .perform(post("/notebooks")
                         .header("Authorization", "Bearer " + authToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.title").value("My First Notebook"));
+                .andExpect(jsonPath("$.title").value("My First Notebook"))
+                .andReturn();
+
+        notebookId = objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asString();
     }
 
     @Test
@@ -152,6 +171,13 @@ class UserJourneyIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].title").value("My First Notebook"));
+
+        mockMvc
+                .perform(get("/notebooks/" + notebookId).header("Authorization", "Bearer " + authToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(notebookId))
+                .andExpect(jsonPath("$.user.email").value(userEmail))
+                .andExpect(jsonPath("$.sources").isArray());
     }
 
     @Test
@@ -203,5 +229,63 @@ class UserJourneyIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new VerifyEmailCodeRequest(userEmail, "000000"))))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @Order(10)
+    @DisplayName("10. List active sessions through the Redis index")
+    void step10_listSessions() throws Exception {
+        mockMvc
+                .perform(get("/sessions").header("Authorization", "Bearer " + authToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$[0].sessionId").exists());
+    }
+
+    @Test
+    @Order(11)
+    @DisplayName("11. Send a chat message without lazy initialization errors")
+    void step11_sendChatMessage() throws Exception {
+        var options = ChatOptions.builder().build();
+        lenient().when(chatModel.getOptions()).thenReturn(options);
+        lenient()
+                .when(chatModel.call(any(Prompt.class)))
+                .thenReturn(ChatResponse
+                        .builder()
+                        .generations(List.of(new Generation(new AssistantMessage("Respuesta de prueba"))))
+                        .build());
+
+        mockMvc
+                .perform(post("/notebooks/" + notebookId + "/chat")
+                        .header("Authorization", "Bearer " + authToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ChatRequest("¿Qué es esto?", null, null, null))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").value("Respuesta de prueba"));
+    }
+
+    @Test
+    @Order(12)
+    @DisplayName("12. Stream a chat message without lazy initialization errors")
+    void step12_streamChatMessage() throws Exception {
+        var options = ChatOptions.builder().build();
+        lenient().when(chatModel.getOptions()).thenReturn(options);
+        lenient()
+                .when(chatModel.stream(any(Prompt.class)))
+                .thenReturn(Flux.just(ChatResponse
+                        .builder()
+                        .generations(List.of(new Generation(new AssistantMessage("Hola desde el stream"))))
+                        .build()));
+
+        MvcResult result = mockMvc
+                .perform(post("/notebooks/" + notebookId + "/chat/stream")
+                        .header("Authorization", "Bearer " + authToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ChatRequest("Hola", null, null, null))))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(result)).andExpect(status().isOk());
+        assertThat(result.getResponse().getContentAsString()).contains("Hola desde el stream");
     }
 }

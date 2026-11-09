@@ -26,8 +26,9 @@ public class FolderService {
 
     @Transactional(readOnly = true)
     public List<FolderResponseDTO> getFoldersForCurrentUser() {
-        User currentUser = userService.getCurrentUser();
-        return folderRepository.findAllByUserIdOrderByCreatedAtDesc(currentUser.getId())
+        UUID userId = requireUserId();
+        return folderRepository
+                .findAllByUserIdOrderByCreatedAtDesc(userId)
                 .stream()
                 .map(folderMapper::toResponseDTO)
                 .collect(Collectors.toList());
@@ -36,33 +37,42 @@ public class FolderService {
     @Transactional
     public FolderResponseDTO createFolder(FolderCreationDTO creationDTO) {
         User currentUser = userService.getCurrentUser();
+        if (currentUser == null) {
+            throw new org.springframework.security.authentication.BadCredentialsException("User not authenticated");
+        }
         Folder folder = new Folder();
         folder.setTitle(creationDTO.title());
         folder.setColor(creationDTO.color());
         folder.setUser(currentUser);
-        
+
         folder = folderRepository.save(folder);
         return folderMapper.toResponseDTO(folder);
     }
-    
+
     @Transactional
     public Optional<FolderResponseDTO> updateFolder(UUID id, FolderUpdateDTO updateDTO) {
-        User currentUser = userService.getCurrentUser();
-        return folderRepository.findByIdAndUserId(id, currentUser.getId())
-                .map(folder -> {
-                    folder.setTitle(updateDTO.title());
-                    folder.setColor(updateDTO.color());
-                    return folderMapper.toResponseDTO(folderRepository.save(folder));
-                });
+        UUID userId = requireUserId();
+        return folderRepository.findByIdAndUserId(id, userId).map(folder -> {
+            folder.setTitle(updateDTO.title());
+            folder.setColor(updateDTO.color());
+            return folderMapper.toResponseDTO(folderRepository.save(folder));
+        });
     }
 
     @Transactional
     public boolean deleteFolder(UUID id) {
-        User currentUser = userService.getCurrentUser();
-        return folderRepository.findByIdAndUserId(id, currentUser.getId())
-                .map(folder -> {
-                    folderRepository.delete(folder);
-                    return true;
-                }).orElse(false);
+        UUID userId = requireUserId();
+        return folderRepository.findByIdAndUserId(id, userId).map(folder -> {
+            folderRepository.delete(folder);
+            return true;
+        }).orElse(false);
+    }
+
+    private UUID requireUserId() {
+        UUID userId = userService.getUserId();
+        if (userId == null) {
+            throw new org.springframework.security.authentication.BadCredentialsException("User not authenticated");
+        }
+        return userId;
     }
 }

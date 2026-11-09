@@ -94,7 +94,7 @@ public class CustomQuestionAnswerAdvisor implements BaseAdvisor {
 
         String documentContext = documents
                 .stream()
-                .map(doc -> "Source ID: " + doc.getId() + "\\n" + doc.getText())
+                .map(doc -> "Source ID: " + doc.getId() + "\n" + doc.getText())
                 .collect(Collectors.joining(System.lineSeparator() + "---------------------" + System.lineSeparator()));
 
         UserMessage userMessage = chatClientRequest.prompt().getUserMessage();

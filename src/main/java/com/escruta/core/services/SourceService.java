@@ -17,11 +17,11 @@ import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.repositories.SourceGroupRepository;
 import com.escruta.core.repositories.SourceRepository;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import lombok.RequiredArgsConstructor;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -39,59 +39,48 @@ public class SourceService {
     private final SourceMapper sourceMapper;
     private final HelperService helperService;
     private final SourceJobService sourceJobService;
+    private final NotebookContextService notebookContextService;
 
     @Value("${services.source-uploads.dir}")
     private String uploadDir;
 
-    public boolean hasNoSources(UUID notebookId) {
-        return !sourceRepository.existsByNotebookId(notebookId);
-    }
-
     public List<SourceResponseDTO> getSources(UUID notebookId) {
-        return sourceRepository.findByNotebookId(notebookId).stream().map(SourceResponseDTO::new).toList();
+        return sourceRepository.findSummariesByNotebookId(notebookId);
     }
 
     public List<SourceResponseDTO> getSourcesByGroup(UUID notebookId, UUID groupId) {
-        return sourceRepository
-                .findByNotebookIdAndSourceGroupId(notebookId, groupId)
-                .stream()
-                .map(SourceResponseDTO::new)
-                .toList();
+        return sourceRepository.findSummariesByNotebookIdAndSourceGroupId(notebookId, groupId);
     }
 
     public SourceWithContentDTO getSource(UUID notebookId, UUID sourceId) {
-        Optional<Source> source = sourceRepository.findById(sourceId);
-        if (source.isEmpty() || !notebookRepository.existsById(notebookId)) {
-            return null;
-        }
-        return source.map(SourceWithContentDTO::new).orElse(null);
+        return sourceRepository.findByIdAndNotebookId(sourceId, notebookId).map(SourceWithContentDTO::new).orElse(null);
     }
 
     @Transactional
     public SourceWithContentDTO addSource(UUID notebookId, SourceCreationDTO newSourceDto) {
-        Optional<Notebook> notebookOptional = notebookRepository.findById(notebookId);
+        Notebook notebook = notebookRepository.getReferenceById(notebookId);
 
-        if (notebookOptional.isEmpty()) {
-            throw new EntityNotFoundException("Notebook not found");
-        }
-
-        Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get(), "");
+        Source source = sourceMapper.toSource(newSourceDto, notebook, "");
         source.setTitle(newSourceDto.link());
         source.setStatus(SourceStatus.PENDING);
         source.setSourceGroup(resolveGroup(notebookId, newSourceDto.groupId()));
         source = sourceRepository.save(source);
         notebookRepository.touchLastActivity(notebookId);
+        notebookContextService.evict();
 
         sourceJobService.startExtractJob(source, null, null);
 
         return new SourceWithContentDTO(source);
     }
 
+    @Transactional
     public SourceResponseDTO updateSource(UUID notebookId, SourceUpdateDTO newSource) {
-        Optional<Notebook> notebookOptional = notebookRepository.findById(notebookId);
-        Optional<Source> sourceOptional = sourceRepository.findById(UUID.fromString(newSource.id()));
+        Optional<Source> sourceOptional = sourceRepository.findByIdAndNotebookId(
+                UUID.fromString(newSource.id()),
+                notebookId
+        );
 
-        if (notebookOptional.isPresent() && sourceOptional.isPresent()) {
+        if (sourceOptional.isPresent()) {
             Source source = sourceOptional.get();
             sourceMapper.updateSourceFromDto(newSource, source);
             if (Boolean.TRUE.equals(newSource.removeGroup())) {
@@ -109,15 +98,17 @@ public class SourceService {
 
     @Transactional
     public SourceResponseDTO deleteSource(UUID notebookId, UUID sourceId) {
-        Optional<Notebook> notebookOptional = notebookRepository.findById(notebookId);
-        Optional<Source> sourceOptional = sourceRepository.findById(sourceId);
+        Optional<SourceResponseDTO> sourceOptional = sourceRepository.findResponseByIdAndNotebookId(
+                sourceId,
+                notebookId
+        );
 
-        if (notebookOptional.isPresent() && sourceOptional.isPresent()) {
-            Source sourceToDelete = sourceOptional.get();
+        if (sourceOptional.isPresent()) {
             try {
                 sourceRepository.deleteById(sourceId);
                 notebookRepository.touchLastActivity(notebookId);
-                return new SourceResponseDTO(sourceToDelete);
+                notebookContextService.evict();
+                return sourceOptional.get();
             } catch (Exception e) {
                 throw new RuntimeException("Error while deleting the source: " + e.getMessage(), e);
             }
@@ -131,21 +122,17 @@ public class SourceService {
             SourceFileCreationDTO newSourceDto,
             MultipartFile file
     ) {
-        Optional<Notebook> notebookOptional = notebookRepository.findById(notebookId);
-
         if (!helperService.isSupportedFileType(file.getContentType(), file.getOriginalFilename())) {
             throw new RuntimeException("Unsupported file type: " + file.getContentType());
         }
 
-        if (notebookOptional.isEmpty()) {
-            throw new EntityNotFoundException("Notebook not found");
-        }
-
-        Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get(), "");
+        Notebook notebook = notebookRepository.getReferenceById(notebookId);
+        Source source = sourceMapper.toSource(newSourceDto, notebook, "");
         source.setStatus(SourceStatus.PENDING);
         source.setSourceGroup(resolveGroup(notebookId, newSourceDto.groupId()));
         source = sourceRepository.save(source);
         notebookRepository.touchLastActivity(notebookId);
+        notebookContextService.evict();
 
         String fileName = file.getOriginalFilename();
         Path tempFile = writeUploadToTemp(file);
@@ -167,17 +154,14 @@ public class SourceService {
 
     @Transactional
     public SourceWithContentDTO addSourceFromText(UUID notebookId, SourceTextCreationDTO newSourceDto) {
-        Optional<Notebook> notebookOptional = notebookRepository.findById(notebookId);
+        Notebook notebook = notebookRepository.getReferenceById(notebookId);
 
-        if (notebookOptional.isEmpty()) {
-            throw new EntityNotFoundException("Notebook not found");
-        }
-
-        Source source = sourceMapper.toSource(newSourceDto, notebookOptional.get());
+        Source source = sourceMapper.toSource(newSourceDto, notebook);
         source.setStatus(SourceStatus.PENDING);
         source.setSourceGroup(resolveGroup(notebookId, newSourceDto.groupId()));
         source = sourceRepository.save(source);
         notebookRepository.touchLastActivity(notebookId);
+        notebookContextService.evict();
 
         sourceJobService.startExtractJob(source, null, null);
 
@@ -186,21 +170,14 @@ public class SourceService {
 
     @Transactional
     public JobStartedResponse generateSummary(UUID notebookId, UUID sourceId) {
-        Optional<Source> sourceOptional = sourceRepository.findById(sourceId);
-        if (sourceOptional.isEmpty()) {
+        if (!sourceRepository.existsByIdAndNotebookId(sourceId, notebookId)) {
             throw new EntityNotFoundException("Source not found with id: " + sourceId);
         }
 
-        Source source = sourceOptional.get();
-        if (!source.getNotebook().getId().equals(notebookId)) {
-            throw new SecurityException("Source does not belong to this notebook.");
-        }
+        sourceRepository.clearSummary(sourceId);
+        notebookRepository.touchLastActivity(notebookId);
 
-        source.setSummary(null);
-        sourceRepository.save(source);
-        notebookRepository.touchLastActivity(source.getNotebook().getId());
-
-        SourceJob job = sourceJobService.startSourceSummaryJob(source);
+        SourceJob job = sourceJobService.startSourceSummaryJob(sourceId, notebookId);
         return new JobStartedResponse(
                 job.getId(),
                 "Summary generation started. It will be published via SSE when ready."
@@ -208,35 +185,17 @@ public class SourceService {
     }
 
     public String getSummary(UUID notebookId, UUID sourceId) {
-        Optional<Source> sourceOptional = sourceRepository.findById(sourceId);
-        if (sourceOptional.isEmpty()) {
-            return "";
-        }
-
-        Source source = sourceOptional.get();
-        if (!source.getNotebook().getId().equals(notebookId)) {
-            throw new SecurityException("Source does not belong to this notebook.");
-        }
-
-        return source.getSummary() != null ?
-                source.getSummary() :
-                "";
+        return sourceRepository.findSummaryTextByIdAndNotebookId(sourceId, notebookId).orElse("");
     }
 
+    @Transactional
     public boolean deleteSummary(UUID notebookId, UUID sourceId) {
-        Optional<Source> sourceOptional = sourceRepository.findById(sourceId);
-        if (sourceOptional.isEmpty()) {
+        int updated = sourceRepository.clearSummaryByIdAndNotebookId(sourceId, notebookId);
+        if (updated == 0) {
             return false;
         }
 
-        Source source = sourceOptional.get();
-        if (!source.getNotebook().getId().equals(notebookId)) {
-            throw new SecurityException("Source does not belong to this notebook.");
-        }
-
-        source.setSummary(null);
-        sourceRepository.save(source);
-        notebookRepository.touchLastActivity(source.getNotebook().getId());
+        notebookRepository.touchLastActivity(notebookId);
         return true;
     }
 

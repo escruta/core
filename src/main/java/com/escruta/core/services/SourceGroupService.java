@@ -8,7 +8,6 @@ import com.escruta.core.entities.SourceGroup;
 import com.escruta.core.mappers.SourceGroupMapper;
 import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.repositories.SourceGroupRepository;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,9 +36,7 @@ public class SourceGroupService {
 
     @Transactional
     public SourceGroupResponseDTO createGroup(UUID notebookId, SourceGroupCreationDTO creationDTO) {
-        Notebook notebook = notebookRepository
-                .findById(notebookId)
-                .orElseThrow(() -> new EntityNotFoundException("Notebook not found"));
+        Notebook notebook = notebookRepository.getReferenceById(notebookId);
 
         SourceGroup group = new SourceGroup();
         group.setNotebook(notebook);

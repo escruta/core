@@ -3,7 +3,6 @@ package com.escruta.core.services;
 import com.escruta.core.dtos.ExtractorResponse;
 import com.escruta.core.dtos.NotebookSummaryDTO;
 import com.escruta.core.dtos.SummaryResponse;
-import com.escruta.core.entities.Notebook;
 import com.escruta.core.entities.Source;
 import com.escruta.core.entities.SourceJob;
 import com.escruta.core.entities.enums.SourceStatus;
@@ -18,7 +17,7 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.document.Document;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -32,11 +31,14 @@ import tools.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Semaphore;
 
 @Service
 @RequiredArgsConstructor
@@ -47,20 +49,29 @@ public class SourceJobService {
     private final NotebookRepository notebookRepository;
     private final HelperService helperService;
     private final AsyncChunkIndexingService asyncChunkIndexingService;
-    private final RetrievalService retrievalService;
+    private final NotebookContextService notebookContextService;
     private final ChatModel chatModel;
     private final SseNotificationService sseNotificationService;
     private final Executor taskExecutor;
     private final PlatformTransactionManager transactionManager;
     private final ObjectMapper objectMapper;
+
+    @Value("${services.jobs.max-concurrency:10}")
+    private int maxConcurrency;
+
     private TransactionTemplate transactionTemplate;
+    private Semaphore jobSlots;
+    private ChatClient chatClient;
 
     @PostConstruct
-    public void initTransactionTemplate() {
+    public void init() {
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.jobSlots = new Semaphore(Math.max(1, maxConcurrency));
+        this.chatClient = ChatClient.create(chatModel);
     }
 
     private static final int SUMMARY_CHUNK_SIZE = 50000;
+    private static final long STALE_JOB_MINUTES = 30;
 
     private static final String SOURCE_SUMMARY_SYSTEM_PROMPT = """
             You are an expert at distilling complex information into clear, concise summaries.
@@ -106,9 +117,9 @@ public class SourceJobService {
     }
 
     @Transactional
-    public SourceJob startSourceSummaryJob(Source source) {
+    public SourceJob startSourceSummaryJob(UUID sourceId, UUID notebookId) {
         SourceJob existing = jobRepository.findFirstBySourceIdAndTypeAndStatusInOrderByCreatedAtDesc(
-                source.getId(),
+                sourceId,
                 SourceJob.JobType.SOURCE_SUMMARY,
                 List.of(SourceJob.JobStatus.PENDING, SourceJob.JobStatus.PROCESSING)
         ).orElse(null);
@@ -116,8 +127,8 @@ public class SourceJobService {
             return existing;
         }
         SourceJob job = jobRepository.save(new SourceJob(
-                source,
-                source.getNotebook(),
+                sourceRepository.getReferenceById(sourceId),
+                notebookRepository.getReferenceById(notebookId),
                 SourceJob.JobType.SOURCE_SUMMARY
         ));
         dispatchAfterCommit(job.getId());
@@ -125,16 +136,20 @@ public class SourceJobService {
     }
 
     @Transactional
-    public SourceJob startNotebookSummaryJob(Notebook notebook) {
+    public SourceJob startNotebookSummaryJob(UUID notebookId) {
         SourceJob existing = jobRepository.findFirstByNotebookIdAndTypeAndStatusInOrderByCreatedAtDesc(
-                notebook.getId(),
+                notebookId,
                 SourceJob.JobType.NOTEBOOK_SUMMARY,
                 List.of(SourceJob.JobStatus.PENDING, SourceJob.JobStatus.PROCESSING)
         ).orElse(null);
         if (existing != null) {
             return existing;
         }
-        SourceJob job = jobRepository.save(new SourceJob(null, notebook, SourceJob.JobType.NOTEBOOK_SUMMARY));
+        SourceJob job = jobRepository.save(new SourceJob(
+                null,
+                notebookRepository.getReferenceById(notebookId),
+                SourceJob.JobType.NOTEBOOK_SUMMARY
+        ));
         dispatchAfterCommit(job.getId());
         return job;
     }
@@ -149,17 +164,30 @@ public class SourceJobService {
     }
 
     public void dispatch(UUID jobId) {
-        taskExecutor.execute(() -> processJob(jobId));
+        taskExecutor.execute(() -> {
+            try {
+                jobSlots.acquire();
+                try {
+                    processJob(jobId);
+                } finally {
+                    jobSlots.release();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
     }
 
     public void processJob(UUID jobId) {
-        SourceJob job = jobRepository.findById(jobId).orElse(null);
-        if (job == null || isTerminal(job)) {
+        Instant staleBefore = Instant.now().minus(STALE_JOB_MINUTES, ChronoUnit.MINUTES);
+        if (jobRepository.claim(jobId, staleBefore) == 0) {
             return;
         }
 
-        job.markAsProcessing();
-        jobRepository.save(job);
+        SourceJob job = jobRepository.findById(jobId).orElse(null);
+        if (job == null) {
+            return;
+        }
 
         try {
             UUID ownerId = switch (job.getType()) {
@@ -194,11 +222,7 @@ public class SourceJobService {
         transactionTemplate.executeWithoutResult(_ -> {
             job.markAsFailed(errorMessage);
             jobRepository.save(job);
-
-            sourceRepository.findById(job.getSource().getId()).ifPresent(source -> {
-                source.setStatus(SourceStatus.FAILED);
-                sourceRepository.save(source);
-            });
+            sourceRepository.updateStatus(job.getSource().getId(), SourceStatus.FAILED);
         });
         notebookRepository.touchLastActivity(job.getNotebook().getId());
     }
@@ -213,18 +237,14 @@ public class SourceJobService {
             return;
         }
         log.info("Resuming {} pending source jobs", pending.size());
-        taskExecutor.execute(() -> pending.forEach(job -> processJob(job.getId())));
-    }
-
-    private boolean isTerminal(SourceJob job) {
-        return job.getStatus() == SourceJob.JobStatus.COMPLETED || job.getStatus() == SourceJob.JobStatus.FAILED;
+        pending.forEach(job -> dispatch(job.getId()));
     }
 
     private UUID processExtract(SourceJob job) {
         Source source = sourceRepository
                 .findById(job.getSource().getId())
                 .orElseThrow(() -> new IllegalStateException("Source no longer exists"));
-        UUID notebookId = sourceRepository.findNotebookId(source.getId());
+        UUID notebookId = source.getNotebook().getId();
 
         String title;
         String content;
@@ -266,6 +286,7 @@ public class SourceJobService {
         source.setStatus(SourceStatus.READY);
         sourceRepository.save(source);
         notebookRepository.touchLastActivity(notebookId);
+        notebookContextService.evict();
 
         return sourceRepository.findNotebookOwnerId(source.getId());
     }
@@ -280,6 +301,7 @@ public class SourceJobService {
         source.setSummary(summary);
         sourceRepository.save(source);
         notebookRepository.touchLastActivity(source.getNotebook().getId());
+        notebookContextService.evict();
         job.setResult(summary);
 
         return sourceRepository.findNotebookOwnerId(source.getId());
@@ -287,40 +309,27 @@ public class SourceJobService {
 
     private UUID processNotebookSummary(SourceJob job) {
         UUID notebookId = job.getNotebook().getId();
-        if (sourceRepository.existsByNotebookId(notebookId)) {
-            String query = "core concepts key ideas summary main topic definitions overview";
-            List<Document> documents = retrievalService.getDocumentsForNotebook(notebookId, query, 20);
-            if (documents.isEmpty()) {
-                throw new IllegalStateException("No sources available or content not yet indexed");
-            }
 
-            String context = documents
-                    .stream()
-                    .map(Document::getText)
-                    .filter(text -> text != null && !text.isBlank())
-                    .reduce((a, b) -> a + "\n\n" + b)
-                    .orElse("");
-            if (context.isBlank()) {
-                throw new IllegalStateException("No content available");
-            }
-
-            NotebookSummaryDTO summary = summarizeNotebook(context);
-            String summaryText = summary != null ?
-                    summary.summary() :
-                    null;
-            notebookRepository.updateSummary(
-                    notebookId,
-                    summaryText,
-                    summary != null ?
-                            toJson(summary.topics()) :
-                            null
-            );
-            job.setResult(summaryText);
-
-            return notebookRepository.findOwnerId(notebookId);
-        } else {
+        String context = notebookContextService.getContext(notebookId, 20);
+        if (context.isBlank()) {
             throw new IllegalStateException("No sources available or content not yet indexed");
         }
+
+        NotebookSummaryDTO summary = summarizeNotebook(context);
+        String summaryText = summary != null ?
+                summary.summary() :
+                null;
+        notebookRepository.updateSummary(
+                notebookId,
+                summaryText,
+                summary != null ?
+                        toJson(summary.topics()) :
+                        null
+        );
+        job.setResult(summaryText);
+        notebookContextService.evict();
+
+        return notebookRepository.findOwnerId(notebookId);
     }
 
     private String summarizeInChunks(String content) {
@@ -359,8 +368,7 @@ public class SourceJobService {
             while (start < context.length()) {
                 int end = Math.min(start + SUMMARY_CHUNK_SIZE, context.length());
                 String chunk = context.substring(start, end);
-                SummaryResponse chunkSummary = ChatClient
-                        .create(chatModel)
+                SummaryResponse chunkSummary = chatClient
                         .prompt()
                         .system(NOTEBOOK_SUMMARY_SYSTEM_PROMPT)
                         .user(promptUser + chunk)
@@ -372,8 +380,7 @@ public class SourceJobService {
                 start = end;
             }
 
-            return ChatClient
-                    .create(chatModel)
+            return chatClient
                     .prompt()
                     .system(NOTEBOOK_SUMMARY_TOPICS_SYSTEM_PROMPT)
                     .user(promptUserFinal + intermediateSummaries)
@@ -381,8 +388,7 @@ public class SourceJobService {
                     .entity(NotebookSummaryDTO.class);
         }
 
-        return ChatClient
-                .create(chatModel)
+        return chatClient
                 .prompt()
                 .system(NOTEBOOK_SUMMARY_TOPICS_SYSTEM_PROMPT)
                 .user(promptUser + context)
@@ -448,10 +454,7 @@ public class SourceJobService {
     }
 
     private Map<String, Object> sourceEventPayload(SourceJob job, SourceStatus fallbackStatus) {
-        SourceStatus status = sourceRepository
-                .findById(job.getSource().getId())
-                .map(Source::getStatus)
-                .orElse(fallbackStatus);
+        SourceStatus status = sourceRepository.findStatusById(job.getSource().getId()).orElse(fallbackStatus);
         return Map.of(
                 "notebookId",
                 job.getNotebook().getId().toString(),

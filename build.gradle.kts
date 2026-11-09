@@ -25,10 +25,6 @@ repositories {
     mavenCentral()
 }
 
-configurations.all {
-    exclude(group = "org.eclipse.angus", module = "angus-activation")
-}
-
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter")
     implementation("org.springframework.boot:spring-boot-starter-web")
@@ -36,6 +32,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
+    implementation("org.springframework.boot:spring-boot-starter-cache")
+    implementation("com.github.ben-manes.caffeine:caffeine")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("io.micrometer:micrometer-registry-prometheus")
     implementation("org.springframework.boot:spring-boot-starter-mail")
     implementation("org.springframework.ai:spring-ai-starter-model-openai")
     implementation("jakarta.activation:jakarta.activation-api:2.1.4")
@@ -48,7 +48,7 @@ dependencies {
     implementation("org.flywaydb:flyway-core")
     implementation("org.flywaydb:flyway-mysql")
     implementation("org.springframework.retry:spring-retry:2.0.13")
-    implementation("org.springframework.ai:spring-ai-retry:1.1.2")
+    implementation("org.springframework.ai:spring-ai-retry:2.0.2")
     implementation("org.springframework.boot:spring-boot-starter-aspectj")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

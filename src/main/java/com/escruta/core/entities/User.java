@@ -4,7 +4,9 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.UuidGenerator;
 
 import java.sql.Timestamp;
 import java.util.List;
@@ -14,9 +16,11 @@ import java.util.UUID;
 @Setter
 @Table(name = "users")
 @Entity
+@DynamicUpdate
 public class User {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @GeneratedValue
+    @UuidGenerator(style = UuidGenerator.Style.TIME)
     @Column(nullable = false)
     private UUID id;
 
@@ -26,7 +30,7 @@ public class User {
     @Column(unique = true, length = 100, nullable = false)
     private String email;
 
-    @OneToMany(mappedBy = "user", cascade = CascadeType.REMOVE, orphanRemoval = true)
+    @OneToMany(mappedBy = "user")
     private List<Notebook> notebooks;
 
     @CreationTimestamp

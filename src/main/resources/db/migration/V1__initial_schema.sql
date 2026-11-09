@@ -2,6 +2,7 @@ CREATE TABLE conversations
 (
     created_at       datetime(6),
     updated_at       datetime(6),
+    version          BIGINT       NOT NULL DEFAULT 0,
     notebook_id      binary(16)   NOT NULL,
     id               varchar(255) NOT NULL PRIMARY KEY,
     title            varchar(255) NOT NULL,
@@ -29,7 +30,7 @@ CREATE TABLE folders
     user_id    binary(16)   NOT NULL,
     title      varchar(255) NOT NULL,
     color      varchar(50),
-    CONSTRAINT fk_folders_users FOREIGN KEY (user_id) REFERENCES users (id)
+    CONSTRAINT fk_folders_users FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
 CREATE TABLE notebooks
@@ -45,7 +46,7 @@ CREATE TABLE notebooks
     summary          text,
     summary_topics   text,
     title            varchar(255) NOT NULL,
-    CONSTRAINT fk_notebooks_users FOREIGN KEY (user_id) REFERENCES users (id),
+    CONSTRAINT fk_notebooks_users FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
     CONSTRAINT fk_notebooks_folders FOREIGN KEY (folder_id) REFERENCES folders (id) ON DELETE SET NULL
 );
 
@@ -54,6 +55,7 @@ CREATE TABLE generation_jobs
     completed_at  timestamp(6) NULL,
     created_at    timestamp(6) NULL,
     updated_at    timestamp(6) NULL,
+    version       BIGINT       NOT NULL DEFAULT 0,
     id            binary(16)   NOT NULL PRIMARY KEY,
     notebook_id   binary(16)   NOT NULL,
     user_id       binary(16)   NOT NULL,
@@ -63,8 +65,8 @@ CREATE TABLE generation_jobs
     type          varchar(255) NOT NULL,
     CONSTRAINT generation_jobs_status_check CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
     CONSTRAINT generation_jobs_type_check CHECK (type IN ('MIND_MAP', 'STUDY_GUIDE', 'FLASHCARDS', 'QUESTIONNAIRE')),
-    CONSTRAINT fk_generation_jobs_users FOREIGN KEY (user_id) REFERENCES users (id),
-    CONSTRAINT fk_generation_jobs_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id)
+    CONSTRAINT fk_generation_jobs_users FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT fk_generation_jobs_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id) ON DELETE CASCADE
 );
 
 CREATE TABLE source_groups
@@ -95,7 +97,7 @@ CREATE TABLE sources
     type               varchar(255),
     CONSTRAINT sources_status_check CHECK (status IN ('PENDING', 'READY', 'FAILED')),
     CONSTRAINT sources_type_check CHECK (type IN ('WEBSITE', 'YOUTUBE_VIDEO', 'FILE', 'TEXT')),
-    CONSTRAINT fk_sources_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id),
+    CONSTRAINT fk_sources_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id) ON DELETE CASCADE,
     CONSTRAINT fk_sources_source_groups FOREIGN KEY (source_group_id) REFERENCES source_groups (id) ON DELETE SET NULL
 );
 
@@ -107,7 +109,7 @@ CREATE TABLE notes
     notebook_id binary(16)   NOT NULL,
     content     longtext,
     title       varchar(255) NOT NULL,
-    CONSTRAINT fk_notes_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id)
+    CONSTRAINT fk_notes_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id) ON DELETE CASCADE
 );
 
 CREATE TABLE messages
@@ -120,7 +122,7 @@ CREATE TABLE messages
     cited_sources       text,
     created_at          datetime(6)  NOT NULL,
     CONSTRAINT messages_role_check CHECK (role IN ('USER', 'ASSISTANT')),
-    CONSTRAINT fk_messages_conversations FOREIGN KEY (conversation_id) REFERENCES conversations (id)
+    CONSTRAINT fk_messages_conversations FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE
 );
 
 CREATE INDEX messages_conversation_id_idx
@@ -131,6 +133,7 @@ CREATE TABLE source_jobs
     completed_at  timestamp(6) NULL,
     created_at    timestamp(6) NULL,
     updated_at    timestamp(6) NULL,
+    version       BIGINT       NOT NULL DEFAULT 0,
     id            binary(16)   NOT NULL PRIMARY KEY,
     source_id     binary(16)   NULL,
     notebook_id   binary(16)   NULL,
@@ -153,7 +156,7 @@ CREATE INDEX source_jobs_notebook_idx
     ON source_jobs (notebook_id, type, status);
 
 ALTER TABLE conversations
-    ADD CONSTRAINT fk_conversations_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id);
+    ADD CONSTRAINT fk_conversations_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id) ON DELETE CASCADE;
 
 CREATE TABLE source_chunks
 (
@@ -174,3 +177,33 @@ CREATE INDEX source_chunks_source_idx
 
 CREATE INDEX source_chunks_notebook_idx
     ON source_chunks (notebook_id);
+
+CREATE INDEX idx_notebooks_user_created
+    ON notebooks (user_id, created_at DESC);
+
+CREATE INDEX idx_notebooks_user_activity
+    ON notebooks (user_id, last_activity_at DESC);
+
+CREATE INDEX idx_notebooks_user_title
+    ON notebooks (user_id, title);
+
+CREATE INDEX idx_sources_notebook_group
+    ON sources (notebook_id, source_group_id);
+
+CREATE INDEX idx_sources_notebook_created
+    ON sources (notebook_id, created_at DESC);
+
+CREATE INDEX idx_conversations_notebook_updated
+    ON conversations (notebook_id, updated_at DESC);
+
+CREATE INDEX idx_conversations_notebook_title
+    ON conversations (notebook_id, title);
+
+CREATE INDEX idx_generation_jobs_notebook_user
+    ON generation_jobs (notebook_id, user_id, created_at DESC);
+
+CREATE INDEX idx_generation_jobs_lookup
+    ON generation_jobs (notebook_id, user_id, type, status, created_at DESC);
+
+CREATE INDEX idx_source_chunks_notebook_source
+    ON source_chunks (notebook_id, source_id);

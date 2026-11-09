@@ -2,7 +2,10 @@ services:
   mariadb:
     image: mariadb:11.7
     container_name: escruta-db
-    command: [ "--innodb-snapshot-isolation=OFF" ]
+    command:
+      - "--innodb-snapshot-isolation=OFF"
+      - "--innodb-buffer-pool-size=256M"
+      - "--max-connections=200"
     environment:
       MYSQL_ROOT_PASSWORD: ${ESCRUTA_DB_PASSWORD:-1234}
       MYSQL_DATABASE: escruta

@@ -5,7 +5,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.UuidGenerator;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -14,18 +16,20 @@ import java.util.UUID;
 @Setter
 @Table(name = "generation_jobs")
 @Entity
+@DynamicUpdate
 @NoArgsConstructor
 public class GenerationJob {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @GeneratedValue
+    @UuidGenerator(style = UuidGenerator.Style.TIME)
     @Column(nullable = false)
     private UUID id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "notebook_id", nullable = false)
     private Notebook notebook;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
@@ -43,6 +47,10 @@ public class GenerationJob {
     @Column(columnDefinition = "TEXT")
     private String errorMessage;
 
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     @CreationTimestamp
     @Column(updatable = false)
     private Instant createdAt;
@@ -56,10 +64,6 @@ public class GenerationJob {
         this.notebook = notebook;
         this.user = user;
         this.type = type;
-    }
-
-    public void markAsProcessing() {
-        this.status = JobStatus.PROCESSING;
     }
 
     public void markAsCompleted(String result) {

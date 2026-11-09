@@ -3,6 +3,7 @@ package com.escruta.core.services;
 import com.escruta.core.entities.SourceChunk;
 import com.escruta.core.repositories.SourceChunkRepository;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NonNull;
 import org.springframework.ai.document.Document;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -11,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -36,10 +38,16 @@ public class RetrievalService {
         }
 
         List<SourceChunk> chunks;
-        if (selectedSourceIds != null && !selectedSourceIds.isEmpty()) {
-            chunks = chunkRepository.searchByNotebookAndSources(notebookId, selectedSourceIds, query, limit);
-        } else {
-            chunks = chunkRepository.searchByNotebook(notebookId, query, limit);
+        try {
+            if (selectedSourceIds != null && !selectedSourceIds.isEmpty()) {
+                chunks = chunkRepository.searchByNotebookAndSources(notebookId, selectedSourceIds, query, limit);
+            } else {
+                chunks = chunkRepository.searchByNotebook(notebookId, query, limit);
+            }
+        } catch (Exception e) {
+            // A missing/corrupt FULLTEXT index must not break chat. Fall back
+            // to the in-memory token scan instead.
+            chunks = List.of();
         }
 
         if (chunks.isEmpty()) {
@@ -77,20 +85,10 @@ public class RetrievalService {
                 PageRequest.of(0, FALLBACK_SCAN_SIZE)
         );
 
-        List<ScoredChunk> scored = new ArrayList<>();
-        for (SourceChunk chunk : candidates) {
-            if (selectedSourceIds != null && !selectedSourceIds.isEmpty() && !selectedSourceIds.contains(chunk.getSourceId())) {
-                continue;
-            }
-            if (chunk.getContent() == null) {
-                continue;
-            }
-            String lower = chunk.getContent().toLowerCase();
-            long hits = tokens.stream().filter(lower::contains).count();
-            if (hits > 0) {
-                scored.add(new ScoredChunk(chunk, hits));
-            }
-        }
+        Set<UUID> selected = selectedSourceIds == null || selectedSourceIds.isEmpty() ?
+                Set.of() :
+                new HashSet<>(selectedSourceIds);
+        List<ScoredChunk> scored = getScoredChunks(candidates, selected, tokens);
 
         return scored
                 .stream()
@@ -100,9 +98,36 @@ public class RetrievalService {
                 .toList();
     }
 
+    private static @NonNull List<ScoredChunk> getScoredChunks(
+            List<SourceChunk> candidates,
+            Set<UUID> selected,
+            Set<String> tokens
+    ) {
+        List<ScoredChunk> scored = new ArrayList<>();
+        for (SourceChunk chunk : candidates) {
+            if (!selected.isEmpty() && !selected.contains(chunk.getSourceId())) {
+                continue;
+            }
+            if (chunk.getContent() == null) {
+                continue;
+            }
+            String lower = chunk.getContent().toLowerCase(Locale.ROOT);
+            long hits = 0;
+            for (String token : tokens) {
+                if (lower.contains(token)) {
+                    hits++;
+                }
+            }
+            if (hits > 0) {
+                scored.add(new ScoredChunk(chunk, hits));
+            }
+        }
+        return scored;
+    }
+
     private static Set<String> extractTokens(String query) {
         Set<String> tokens = new HashSet<>();
-        for (String token : query.toLowerCase().split("[^\\p{L}\\p{N}]+")) {
+        for (String token : query.toLowerCase(Locale.ROOT).split("[^\\p{L}\\p{N}]+")) {
             if (token.length() >= 3) {
                 tokens.add(token);
             }

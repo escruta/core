@@ -40,7 +40,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({AccessDeniedException.class, SecurityException.class})
-    public ProblemDetail handleForbidden(Exception ex) {
+    public ProblemDetail handleForbidden() {
         return createProblem(
                 HttpStatus.FORBIDDEN,
                 "Access denied",
@@ -49,7 +49,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(AccountStatusException.class)
-    public ProblemDetail handleAccountStatus(AccountStatusException ex) {
+    public ProblemDetail handleAccountStatus() {
         return createProblem(
                 HttpStatus.FORBIDDEN,
                 "Access denied",
@@ -58,7 +58,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({NoResourceFoundException.class, EntityNotFoundException.class})
-    public ProblemDetail handleNotFound(Exception ex) {
+    public ProblemDetail handleNotFound() {
         return createProblem(
                 HttpStatus.NOT_FOUND,
                 "Resource not found",
@@ -67,7 +67,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({HttpMessageNotReadableException.class, IllegalArgumentException.class, IllegalStateException.class})
-    public ProblemDetail handleBadRequest(Exception ex) {
+    public ProblemDetail handleBadRequest() {
         return createProblem(
                 HttpStatus.BAD_REQUEST,
                 "Invalid request",
@@ -76,11 +76,29 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
-    public ProblemDetail handleOptimisticLock(ObjectOptimisticLockingFailureException ex) {
+    public ProblemDetail handleOptimisticLock() {
         return createProblem(
                 HttpStatus.CONFLICT,
                 "Conflict",
                 "This item was modified by another session. Refresh and try again."
+        );
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ProblemDetail handleDataIntegrity() {
+        return createProblem(
+                HttpStatus.CONFLICT,
+                "Conflict",
+                "The operation conflicts with existing data. Refresh and try again."
+        );
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ProblemDetail handleUploadTooLarge() {
+        return createProblem(
+                HttpStatus.CONTENT_TOO_LARGE,
+                "File too large",
+                "The uploaded file exceeds the maximum allowed size."
         );
     }
 
@@ -100,8 +118,23 @@ public class GlobalExceptionHandler {
         return createProblem(
                 HttpStatus.BAD_REQUEST,
                 "Invalid request",
-                "Please fix the highlighted fields and try again."
+                errors.isBlank() ?
+                        "Please fix the highlighted fields and try again." :
+                        "Please fix: " + errors
         );
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ProblemDetail handleRateLimit(RateLimitExceededException ex) {
+        return createProblem(HttpStatus.TOO_MANY_REQUESTS, "Too many requests", ex.getMessage());
+    }
+
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ProblemDetail handleResponseStatus(org.springframework.web.server.ResponseStatusException ex) {
+        String detail = ex.getReason() != null ?
+                ex.getReason() :
+                "Request failed";
+        return createProblem(ex.getStatusCode(), detail, detail);
     }
 
     @ExceptionHandler(TransientAiException.class)
@@ -132,7 +165,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({RuntimeException.class, Exception.class})
     public ProblemDetail handleGeneric(Exception ex) {
-        logger.error("Unexpected error: {} - {}", ex.getClass().getSimpleName(), ex.getMessage());
+        logger.error("Unexpected error: {} - {}", ex.getClass().getSimpleName(), ex.getMessage(), ex);
         return createProblem(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Internal Server Error",

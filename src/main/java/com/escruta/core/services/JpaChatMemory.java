@@ -54,7 +54,7 @@ public class JpaChatMemory implements ChatMemory {
 
     @Override
     public void clear(@NonNull String conversationId) {
-        chatMessageRepository.deleteByConversation_Id(conversationId);
+        chatMessageRepository.deleteAllByConversationId(conversationId);
     }
 
     private Message toAiMessage(ChatMessage message) {

@@ -8,7 +8,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,7 +20,6 @@ public class SourceGroupController {
     private final SourceGroupService sourceGroupService;
 
     @GetMapping
-    @PreAuthorize("@notebookOwnershipService.isUserNotebookOwner(#notebookId)")
     public ResponseEntity<List<SourceGroupResponseDTO>> getSourceGroups(
             @PathVariable UUID notebookId
     ) {
@@ -29,7 +27,6 @@ public class SourceGroupController {
     }
 
     @PostMapping
-    @PreAuthorize("@notebookOwnershipService.isUserNotebookOwner(#notebookId)")
     public ResponseEntity<SourceGroupResponseDTO> createSourceGroup(
             @PathVariable UUID notebookId,
             @Valid @RequestBody
@@ -39,7 +36,6 @@ public class SourceGroupController {
     }
 
     @PatchMapping("{groupId}")
-    @PreAuthorize("@notebookOwnershipService.isUserNotebookOwner(#notebookId)")
     public ResponseEntity<SourceGroupResponseDTO> updateSourceGroup(
             @PathVariable UUID notebookId,
             @PathVariable UUID groupId,
@@ -52,7 +48,6 @@ public class SourceGroupController {
     }
 
     @DeleteMapping("{groupId}")
-    @PreAuthorize("@notebookOwnershipService.isUserNotebookOwner(#notebookId)")
     public ResponseEntity<Void> deleteSourceGroup(@PathVariable UUID notebookId, @PathVariable UUID groupId) {
         if (sourceGroupService.deleteGroup(notebookId, groupId)) {
             return ResponseEntity.noContent().build();
