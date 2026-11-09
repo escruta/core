@@ -88,6 +88,8 @@ spring:
         model: ${ESCRUTA_AI_MODEL:}
         temperature: 0.5
         reasoning-effort: low
+        custom-headers:
+          User-Agent: escruta-core
     retry:
       exclude-on-http-codes: 429
 logging:
@@ -107,6 +109,9 @@ security:
     allowedHeaders: Authorization,Content-Type
     allowCredentials: true
 services:
+  ai:
+    session-header: ${ESCRUTA_AI_SESSION_HEADER:}
+    session-id: ${ESCRUTA_AI_SESSION_ID:}
   mail:
     log-code: ${ESCRUTA_MAIL_LOG_CODE:true}
   helper:

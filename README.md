@@ -49,6 +49,8 @@ application at runtime.
 | `ESCRUTA_AI_BASE_URL`                         | Base URL for the AI provider                         | (Required)                              |
 | `ESCRUTA_AI_API_KEY`                          | API Key for the AI provider                          | (Required)                              |
 | `ESCRUTA_AI_MODEL`                            | AI model to use for chat                             | (Required)                              |
+| `ESCRUTA_AI_SESSION_HEADER`                   | Custom session header name for the AI provider       | (Empty: header is not sent)             |
+| `ESCRUTA_AI_SESSION_ID`                       | Value for the custom session header                  | (Empty: header is not sent)             |
 | `ESCRUTA_CORS_ALLOWED_ORIGINS`                | Allowed origins for CORS                             | `http://localhost:5173`                 |
 | `ESCRUTA_SESSION_EXPIRATION_SECONDS`          | Session expiration interval (seconds)                | `3600`                                  |
 | `ESCRUTA_AUTH_CODE_LENGTH`                    | Verification code length (digits)                    | `6`                                     |
@@ -67,6 +69,18 @@ application at runtime.
 | `ESCRUTA_HELPER_API_KEY`                      | Internal API Key for the Helper                      | (Required)                              |
 
 See [application.yml](./src/main/resources/application.yml) for the full list of configuration options.
+
+### Provider session header
+
+Some OpenAI-compatible providers require a session or routing header. If your provider does, set it in your run
+configuration (for example, IntelliJ IDEA's **Environment variables**):
+
+| Variable                    | Value                                   |
+|-----------------------------|-----------------------------------------|
+| `ESCRUTA_AI_SESSION_HEADER` | Header name required by the provider    |
+| `ESCRUTA_AI_SESSION_ID`     | Stable value sent with every AI request |
+
+If either variable is empty, no session header is sent.
 
 ### Development Scripts
 
