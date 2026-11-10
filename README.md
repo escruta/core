@@ -53,7 +53,6 @@ application at runtime.
 | `ESCRUTA_AI_MODEL`                            | AI model to use for chat                             | (Required)                              |
 | `ESCRUTA_AI_SESSION_HEADER`                   | Custom session header name for the AI provider       | (Empty: header is not sent)             |
 | `ESCRUTA_AI_SESSION_ID`                       | Value for the custom session header                  | (Empty: header is not sent)             |
-| `ESCRUTA_CORS_ALLOWED_ORIGINS`                | Allowed origins for CORS                             | `http://localhost:5173`                 |
 | `ESCRUTA_SESSION_EXPIRATION_SECONDS`          | Session expiration interval (seconds)                | `3600`                                  |
 | `ESCRUTA_AUTH_CODE_LENGTH`                    | Verification code length (digits)                    | `6`                                     |
 | `ESCRUTA_AUTH_CODE_TTL_SECONDS`               | Verification code lifetime (seconds)                 | `600`                                   |

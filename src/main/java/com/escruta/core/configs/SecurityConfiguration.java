@@ -2,15 +2,12 @@ package com.escruta.core.configs;
 
 import com.escruta.core.services.TokenService;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -23,9 +20,6 @@ import org.springframework.security.oauth2.server.resource.introspection.OpaqueT
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
 import org.springframework.security.web.authentication.logout.LogoutHandler;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.*;
 
@@ -33,24 +27,13 @@ import java.util.*;
 @EnableWebSecurity
 @EnableMethodSecurity
 @RequiredArgsConstructor
-@Slf4j
 public class SecurityConfiguration {
     private final TokenService tokenService;
-
-    @Value("${security.cors.allowedOrigins}")
-    private String allowedOrigins;
-    @Value("${security.cors.allowedMethods}")
-    private String allowedMethods;
-    @Value("${security.cors.allowedHeaders}")
-    private String allowedHeaders;
-    @Value("${security.cors.allowCredentials}")
-    private boolean allowCredentials;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) {
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests((authorize) -> authorize
                         .requestMatchers(HttpMethod.POST, "/auth/**")
@@ -111,31 +94,5 @@ public class SecurityConfiguration {
                     Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"))
             );
         };
-    }
-
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-
-        List<String> origins = Arrays.stream(allowedOrigins.split(","))
-                .map(String::trim)
-                .filter(origin -> !origin.isEmpty())
-                .toList();
-        if (origins.contains("*")) {
-            log.warn("CORS allowedOrigins contains '*'; restrict ESCRUTA_CORS_ALLOWED_ORIGINS in production");
-        }
-        configuration.setAllowedOriginPatterns(origins);
-
-        List<String> methods = Arrays.asList(allowedMethods.split(","));
-        configuration.setAllowedMethods(methods);
-
-        List<String> headers = Arrays.asList(allowedHeaders.split(","));
-        configuration.setAllowedHeaders(headers);
-
-        configuration.setAllowCredentials(allowCredentials);
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
     }
 }
