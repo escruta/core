@@ -66,6 +66,7 @@ application at runtime.
 | `ESCRUTA_MAIL_SMTP_AUTH`                      | Enable SMTP auth                                     | `true`                                  |
 | `ESCRUTA_MAIL_SMTP_STARTTLS`                  | Enable SMTP STARTTLS                                 | `true`                                  |
 | `ESCRUTA_MAIL_FROM`                           | Sender address for verification emails               | `noreply@escruta.com`                   |
+| `ESCRUTA_MAIL_HEALTH_ENABLED`                 | Enable the SMTP health check                         | `false`                                 |
 | `ESCRUTA_HELPER_URL`                          | Helper service URL (search + extract)                | `http://localhost:8000`                 |
 | `ESCRUTA_HELPER_API_KEY`                      | Internal API Key for the Helper                      | (Required)                              |
 

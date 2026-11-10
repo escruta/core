@@ -125,6 +125,9 @@ services:
     window-seconds: ${ESCRUTA_RATE_LIMIT_WINDOW:60}
 
 management:
+  health:
+    mail:
+      enabled: ${ESCRUTA_MAIL_HEALTH_ENABLED:false}
   endpoints:
     web:
       exposure:
