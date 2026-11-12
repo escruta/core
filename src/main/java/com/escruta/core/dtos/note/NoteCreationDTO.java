@@ -10,6 +10,10 @@ public record NoteCreationDTO(
         UUID notebookId,
         @NotBlank
         String title,
-        String content
+        String content,
+        UUID groupId
 ) {
+    public NoteCreationDTO(UUID notebookId, String title, String content) {
+        this(notebookId, title, content, null);
+    }
 }

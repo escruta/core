@@ -5,8 +5,10 @@ import com.escruta.core.dtos.note.NoteResponseDTO;
 import com.escruta.core.dtos.note.NoteUpdateDTO;
 import com.escruta.core.dtos.note.NoteWithContentDTO;
 import com.escruta.core.entities.Note;
+import com.escruta.core.entities.NoteGroup;
 import com.escruta.core.entities.Notebook;
 import com.escruta.core.mappers.NoteMapper;
+import com.escruta.core.repositories.NoteGroupRepository;
 import com.escruta.core.repositories.NoteRepository;
 import com.escruta.core.repositories.NotebookRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,16 +23,28 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class NoteService {
     private final NoteRepository noteRepository;
+    private final NoteGroupRepository noteGroupRepository;
     private final NotebookRepository notebookRepository;
     private final UserService userService;
     private final NoteMapper noteMapper;
 
     public List<NoteResponseDTO> getNotes(UUID notebookId) {
+        return getNotes(notebookId, null);
+    }
+
+    public List<NoteResponseDTO> getNotes(UUID notebookId, UUID groupId) {
         UUID userId = userService.getUserId();
         if (userId == null)
             return List.of();
 
         if (notebookId != null) {
+            if (groupId != null) {
+                return noteRepository
+                        .findByNotebookIdAndNoteGroupIdAndNotebook_UserId(notebookId, groupId, userId)
+                        .stream()
+                        .map(NoteResponseDTO::new)
+                        .toList();
+            }
             return noteRepository
                     .findByNotebookIdAndNotebook_UserId(notebookId, userId)
                     .stream()
@@ -64,6 +78,7 @@ public class NoteService {
             return null;
 
         Note note = noteMapper.toNote(newNoteDto, notebookOptional.get());
+        note.setNoteGroup(resolveGroup(newNoteDto.notebookId(), newNoteDto.groupId()));
         noteRepository.save(note);
         notebookRepository.touchLastActivity(newNoteDto.notebookId());
         return new NoteResponseDTO(note);
@@ -84,6 +99,11 @@ public class NoteService {
             Note note = noteOptional.get();
             UUID notebookId = note.getNotebook().getId();
             noteMapper.updateNoteFromDto(newNoteDto, note);
+            if (Boolean.TRUE.equals(newNoteDto.removeGroup())) {
+                note.setNoteGroup(null);
+            } else if (newNoteDto.groupId() != null) {
+                note.setNoteGroup(resolveGroup(notebookId, newNoteDto.groupId()));
+            }
             noteRepository.save(note);
             notebookRepository.touchLastActivity(notebookId);
             return new NoteResponseDTO(note);
@@ -107,5 +127,12 @@ public class NoteService {
             return new NoteResponseDTO(note);
         }
         return null;
+    }
+
+    private NoteGroup resolveGroup(UUID notebookId, UUID groupId) {
+        if (groupId == null) {
+            return null;
+        }
+        return noteGroupRepository.findByIdAndNotebookId(groupId, notebookId).orElse(null);
     }
 }

@@ -53,6 +53,9 @@ public class Notebook {
     private List<SourceGroup> sourceGroups;
 
     @OneToMany(mappedBy = "notebook")
+    private List<NoteGroup> noteGroups;
+
+    @OneToMany(mappedBy = "notebook")
     private List<Note> notes;
 
     @OneToMany(mappedBy = "notebook")

@@ -8,6 +8,7 @@ import java.util.UUID;
 public record NoteWithContentDTO(
         UUID id,
         UUID notebookId,
+        UUID groupId,
         String title,
         String content,
         Timestamp createdAt,
@@ -17,6 +18,9 @@ public record NoteWithContentDTO(
         this(
                 note.getId(),
                 note.getNotebook().getId(),
+                note.getNoteGroup() != null ?
+                        note.getNoteGroup().getId() :
+                        null,
                 note.getTitle(),
                 note.getContent(),
                 note.getCreatedAt(),

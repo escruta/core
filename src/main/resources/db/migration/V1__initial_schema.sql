@@ -101,15 +101,28 @@ CREATE TABLE sources
     CONSTRAINT fk_sources_source_groups FOREIGN KEY (source_group_id) REFERENCES source_groups (id) ON DELETE SET NULL
 );
 
-CREATE TABLE notes
+CREATE TABLE note_groups
 (
     created_at  datetime(6),
     updated_at  datetime(6),
     id          binary(16)   NOT NULL PRIMARY KEY,
     notebook_id binary(16)   NOT NULL,
-    content     longtext,
     title       varchar(255) NOT NULL,
-    CONSTRAINT fk_notes_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id) ON DELETE CASCADE
+    color       varchar(50),
+    CONSTRAINT fk_note_groups_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id) ON DELETE CASCADE
+);
+
+CREATE TABLE notes
+(
+    created_at    datetime(6),
+    updated_at    datetime(6),
+    id            binary(16)   NOT NULL PRIMARY KEY,
+    notebook_id   binary(16)   NOT NULL,
+    note_group_id binary(16)   NULL,
+    content       longtext,
+    title         varchar(255) NOT NULL,
+    CONSTRAINT fk_notes_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id) ON DELETE CASCADE,
+    CONSTRAINT fk_notes_note_groups FOREIGN KEY (note_group_id) REFERENCES note_groups (id) ON DELETE SET NULL
 );
 
 CREATE TABLE messages
@@ -186,6 +199,9 @@ CREATE INDEX idx_notebooks_user_activity
 
 CREATE INDEX idx_notebooks_user_title
     ON notebooks (user_id, title);
+
+CREATE INDEX idx_notes_notebook_group
+    ON notes (notebook_id, note_group_id);
 
 CREATE INDEX idx_sources_notebook_group
     ON sources (notebook_id, source_group_id);

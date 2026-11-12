@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.annotations.UuidGenerator;
 
@@ -26,6 +28,11 @@ public class Note {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(nullable = false)
     private Notebook notebook;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "note_group_id")
+    @OnDelete(action = OnDeleteAction.SET_NULL)
+    private NoteGroup noteGroup;
 
     @Column(nullable = false)
     private String title;

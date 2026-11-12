@@ -5,9 +5,11 @@ import com.escruta.core.dtos.note.NoteResponseDTO;
 import com.escruta.core.dtos.note.NoteUpdateDTO;
 import com.escruta.core.dtos.note.NoteWithContentDTO;
 import com.escruta.core.entities.Note;
+import com.escruta.core.entities.NoteGroup;
 import com.escruta.core.entities.Notebook;
 import com.escruta.core.entities.User;
 import com.escruta.core.mappers.NoteMapper;
+import com.escruta.core.repositories.NoteGroupRepository;
 import com.escruta.core.repositories.NoteRepository;
 import com.escruta.core.repositories.NotebookRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -32,6 +34,9 @@ class NoteServiceTest {
     private NoteRepository noteRepository;
 
     @Mock
+    private NoteGroupRepository noteGroupRepository;
+
+    @Mock
     private NotebookRepository notebookRepository;
 
     @Mock
@@ -45,6 +50,7 @@ class NoteServiceTest {
 
     private static final UUID NOTEBOOK_ID = UUID.randomUUID();
     private static final UUID NOTE_ID = UUID.randomUUID();
+    private static final UUID GROUP_ID = UUID.randomUUID();
     private static final UUID USER_ID = UUID.randomUUID();
 
     @Test
@@ -179,6 +185,85 @@ class NoteServiceTest {
     }
 
     @Test
+    @DisplayName("Should return notes filtered by group")
+    void getNotes_shouldReturnNotesForGroup() {
+        Notebook notebook = createNotebook();
+        Note note = createNote(NOTE_ID, "Grouped Note", "Content", notebook);
+
+        when(userService.getUserId()).thenReturn(USER_ID);
+        when(noteRepository.findByNotebookIdAndNoteGroupIdAndNotebook_UserId(
+                NOTEBOOK_ID,
+                GROUP_ID,
+                USER_ID
+        )).thenReturn(List.of(note));
+
+        List<NoteResponseDTO> result = noteService.getNotes(NOTEBOOK_ID, GROUP_ID);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().title()).isEqualTo("Grouped Note");
+    }
+
+    @Test
+    @DisplayName("Should add note to a group")
+    void addNote_shouldAddNoteToGroup() {
+        NoteCreationDTO dto = new NoteCreationDTO(NOTEBOOK_ID, "New Note", "New Content", GROUP_ID);
+        Notebook notebook = createNotebook();
+        Note note = createNote(NOTE_ID, "New Note", "New Content", notebook);
+        NoteGroup group = createGroup(notebook);
+
+        when(userService.getUserId()).thenReturn(USER_ID);
+        when(notebookRepository.findByIdAndUserId(NOTEBOOK_ID, USER_ID)).thenReturn(Optional.of(notebook));
+        when(noteGroupRepository.findByIdAndNotebookId(GROUP_ID, NOTEBOOK_ID)).thenReturn(Optional.of(group));
+        when(noteMapper.toNote(dto, notebook)).thenReturn(note);
+        when(noteRepository.save(note)).thenReturn(note);
+
+        NoteResponseDTO result = noteService.addNote(dto);
+
+        assertThat(result).isNotNull();
+        assertThat(result.groupId()).isEqualTo(GROUP_ID);
+        assertThat(note.getNoteGroup()).isEqualTo(group);
+    }
+
+    @Test
+    @DisplayName("Should remove note from its group")
+    void updateNote_shouldRemoveNoteFromGroup() {
+        String noteIdStr = NOTE_ID.toString();
+        NoteUpdateDTO dto = new NoteUpdateDTO(noteIdStr, null, null, null, true);
+        Notebook notebook = createNotebook();
+        Note existingNote = createNote(NOTE_ID, "Grouped Note", "Content", notebook);
+        existingNote.setNoteGroup(createGroup(notebook));
+
+        when(userService.getUserId()).thenReturn(USER_ID);
+        when(noteRepository.findByIdAndNotebook_UserId(NOTE_ID, USER_ID)).thenReturn(Optional.of(existingNote));
+
+        NoteResponseDTO result = noteService.updateNote(dto);
+
+        assertThat(result).isNotNull();
+        assertThat(existingNote.getNoteGroup()).isNull();
+        assertThat(result.groupId()).isNull();
+    }
+
+    @Test
+    @DisplayName("Should move note to another group")
+    void updateNote_shouldMoveNoteToGroup() {
+        String noteIdStr = NOTE_ID.toString();
+        NoteUpdateDTO dto = new NoteUpdateDTO(noteIdStr, null, null, GROUP_ID, false);
+        Notebook notebook = createNotebook();
+        Note existingNote = createNote(NOTE_ID, "Note", "Content", notebook);
+        NoteGroup group = createGroup(notebook);
+
+        when(userService.getUserId()).thenReturn(USER_ID);
+        when(noteRepository.findByIdAndNotebook_UserId(NOTE_ID, USER_ID)).thenReturn(Optional.of(existingNote));
+        when(noteGroupRepository.findByIdAndNotebookId(GROUP_ID, NOTEBOOK_ID)).thenReturn(Optional.of(group));
+
+        NoteResponseDTO result = noteService.updateNote(dto);
+
+        assertThat(result).isNotNull();
+        assertThat(existingNote.getNoteGroup()).isEqualTo(group);
+        assertThat(result.groupId()).isEqualTo(GROUP_ID);
+    }
+
+    @Test
     @DisplayName("Should update note successfully")
     void updateNote_shouldUpdateNoteSuccessfully() {
         String noteIdStr = NOTE_ID.toString();
@@ -246,6 +331,14 @@ class NoteServiceTest {
         note.setContent(content);
         note.setNotebook(notebook);
         return note;
+    }
+
+    private NoteGroup createGroup(Notebook notebook) {
+        NoteGroup group = new NoteGroup();
+        group.setId(GROUP_ID);
+        group.setTitle("Test Group");
+        group.setNotebook(notebook);
+        return group;
     }
 
     private Notebook createNotebook() {

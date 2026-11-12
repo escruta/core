@@ -12,6 +12,8 @@ import java.util.UUID;
 public interface NoteRepository extends JpaRepository<Note, UUID> {
     List<Note> findByNotebookIdAndNotebook_UserId(UUID notebookId, UUID userId);
 
+    List<Note> findByNotebookIdAndNoteGroupIdAndNotebook_UserId(UUID notebookId, UUID groupId, UUID userId);
+
     List<Note> findByNotebook_UserId(UUID userId);
 
     Optional<Note> findByIdAndNotebook_UserId(UUID id, UUID userId);

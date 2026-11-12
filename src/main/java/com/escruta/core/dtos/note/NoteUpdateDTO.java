@@ -8,6 +8,11 @@ public record NoteUpdateDTO(
         @NotNull
         String id,
         String title,
-        String content
+        String content,
+        java.util.UUID groupId,
+        Boolean removeGroup
 ) {
+    public NoteUpdateDTO(String id, String title, String content) {
+        this(id, title, content, null, null);
+    }
 }

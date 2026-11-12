@@ -22,9 +22,10 @@ public class NoteController {
 
     @GetMapping
     public ResponseEntity<List<NoteResponseDTO>> getNotes(
-            @RequestParam(required = false) UUID notebookId
+            @RequestParam(required = false) UUID notebookId,
+            @RequestParam(required = false) UUID groupId
     ) {
-        return ResponseEntity.ok(noteService.getNotes(notebookId));
+        return ResponseEntity.ok(noteService.getNotes(notebookId, groupId));
     }
 
     @GetMapping("{noteId}")
