@@ -2,12 +2,14 @@ package com.escruta.core.controllers;
 
 import com.escruta.core.dtos.conversation.ConversationMessagesResponse;
 import com.escruta.core.dtos.conversation.ConversationResponse;
+import com.escruta.core.dtos.conversation.ConversationUpdateDTO;
 import com.escruta.core.dtos.conversation.ConversationsPageResponse;
 import com.escruta.core.entities.ChatMessage;
 import com.escruta.core.entities.Conversation;
 import com.escruta.core.repositories.ConversationRepository;
 import com.escruta.core.repositories.OffsetPageRequest;
 import com.escruta.core.services.ChatMessageService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -46,8 +49,7 @@ class ConversationController {
 
         if (search != null && !search.isBlank()) {
             String term = search.trim();
-            conversations = conversationRepository.findByNotebookIdAndTitleContainingIgnoreCaseOrderByUpdatedAtDesc(
-                    notebookId,
+            conversations = conversationRepository.findByNotebookIdAndTitleContainingIgnoreCaseOrderByUpdatedAtDesc(notebookId,
                     term,
                     pageable
             );
@@ -101,6 +103,32 @@ class ConversationController {
                 conversation.getStatus(),
                 conversation.isHasUnseenReply(),
                 messageResponses
+        ));
+    }
+
+    @PatchMapping("/{conversationId}")
+    ResponseEntity<ConversationResponse> renameConversation(
+            @PathVariable UUID notebookId,
+            @PathVariable String conversationId,
+            @Valid @RequestBody ConversationUpdateDTO conversationUpdateDTO
+    ) {
+        var conversation = conversationRepository.findByIdAndNotebookId(conversationId, notebookId).orElse(null);
+
+        if (conversation == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        conversation.setTitle(conversationUpdateDTO.title().trim());
+        conversationRepository.save(conversation);
+
+        return ResponseEntity.ok(new ConversationResponse(
+                conversation.getId(),
+                conversation.getTitle(),
+                conversation.getMode(),
+                conversation.getStatus(),
+                conversation.isHasUnseenReply(),
+                conversation.getCreatedAt(),
+                conversation.getUpdatedAt()
         ));
     }
 
