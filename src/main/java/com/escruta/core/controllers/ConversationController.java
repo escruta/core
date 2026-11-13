@@ -38,24 +38,26 @@ class ConversationController {
             @PathVariable UUID notebookId,
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(defaultValue = "0") int offset,
-            @RequestParam(required = false) String search
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "Newest") String sort
     ) {
         int boundedLimit = Math.max(1, Math.min(limit, 100));
         long boundedOffset = Math.max(0, offset);
-        var pageable = new OffsetPageRequest(boundedOffset, boundedLimit, Sort.unsorted());
+        var pageable = new OffsetPageRequest(boundedOffset, boundedLimit, buildSort(sort));
 
         List<Conversation> conversations;
         long total;
 
         if (search != null && !search.isBlank()) {
             String term = search.trim();
-            conversations = conversationRepository.findByNotebookIdAndTitleContainingIgnoreCaseOrderByUpdatedAtDesc(notebookId,
+            conversations = conversationRepository.findByNotebookIdAndTitleContainingIgnoreCase(
+                    notebookId,
                     term,
                     pageable
             );
             total = conversationRepository.countByNotebookIdAndTitleContainingIgnoreCase(notebookId, term);
         } else {
-            conversations = conversationRepository.findByNotebookIdOrderByUpdatedAtDesc(notebookId, pageable);
+            conversations = conversationRepository.findByNotebookId(notebookId, pageable);
             total = conversationRepository.countByNotebookId(notebookId);
         }
 
@@ -161,5 +163,14 @@ class ConversationController {
         conversationRepository.delete(conversation);
 
         return ResponseEntity.noContent().build();
+    }
+
+    private Sort buildSort(String sort) {
+        return switch (sort) {
+            case "Oldest" -> Sort.by(Sort.Direction.ASC, "updatedAt");
+            case "Alphabetical" -> Sort.by(Sort.Direction.ASC, "title");
+            case "Reverse Alphabetical" -> Sort.by(Sort.Direction.DESC, "title");
+            default -> Sort.by(Sort.Direction.DESC, "updatedAt");
+        };
     }
 }

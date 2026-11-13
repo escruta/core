@@ -12,13 +12,9 @@ import java.util.UUID;
 
 @Repository
 public interface ConversationRepository extends CrudRepository<Conversation, String> {
-    List<Conversation> findByNotebookIdOrderByUpdatedAtDesc(UUID notebookId, Pageable pageable);
+    List<Conversation> findByNotebookId(UUID notebookId, Pageable pageable);
 
-    List<Conversation> findByNotebookIdAndTitleContainingIgnoreCaseOrderByUpdatedAtDesc(
-            UUID notebookId,
-            String title,
-            Pageable pageable
-    );
+    List<Conversation> findByNotebookIdAndTitleContainingIgnoreCase(UUID notebookId, String title, Pageable pageable);
 
     @EntityGraph(attributePaths = {"notebook"})
     Optional<Conversation> findByIdAndNotebookId(String id, UUID notebookId);
