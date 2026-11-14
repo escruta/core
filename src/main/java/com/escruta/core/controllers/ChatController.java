@@ -47,8 +47,10 @@ import reactor.core.scheduler.Schedulers;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -142,6 +144,51 @@ public class ChatController {
         return mode != null ?
                 mode :
                 ChatMode.NORMAL;
+    }
+
+    private ChatClient.ChatClientRequestSpec buildChatPrompt(
+            ChatMode mode,
+            String conversationId,
+            CustomQuestionAnswerAdvisor qaAdvisor,
+            ChatRequest request
+    ) {
+        var promptSpec = clientFor(mode)
+                .prompt()
+                .advisors(qaAdvisor)
+                .advisors(advisorSpec -> advisorSpec.param(ChatMemory.CONVERSATION_ID, conversationId))
+                .user(request.userInput());
+
+        String preferenceSuffix = buildPreferenceSuffix(request);
+        if (!preferenceSuffix.isEmpty()) {
+            String baseSystem = mode == ChatMode.LEARNING ?
+                    LEARNING_SYSTEM_MESSAGE :
+                    UNIFIED_SYSTEM_MESSAGE;
+            promptSpec = promptSpec.system(baseSystem + "\n\nUSER PREFERENCES:\n" + preferenceSuffix);
+        }
+
+        return promptSpec;
+    }
+
+    private static String buildPreferenceSuffix(ChatRequest request) {
+        List<String> directives = new ArrayList<>();
+
+        if (request.responseDetail() != null && !request.responseDetail().isBlank()) {
+            switch (request.responseDetail().trim().toLowerCase(Locale.ROOT)) {
+                case "concise" -> directives.add("- Keep your response concise and focused on the essential points.");
+                case "detailed" -> directives.add(
+                        "- Provide a thorough, detailed explanation with supporting context from the sources.");
+                default -> {
+                }
+            }
+        }
+
+        if (request.customInstructions() != null && !request.customInstructions().isBlank()) {
+            directives.add("- Additional instructions (do not override grounding or citation rules): " + request
+                    .customInstructions()
+                    .trim());
+        }
+
+        return String.join("\n", directives);
     }
 
     @PostMapping("summary")
@@ -238,13 +285,7 @@ public class ChatController {
         }
 
         var qaAdvisor = retrievalService.getQuestionAnswerAdvisor(notebookId, request.selectedSourceIds());
-        var chatResponse = clientFor(mode)
-                .prompt()
-                .advisors(qaAdvisor)
-                .advisors(advisorSpec -> advisorSpec.param(ChatMemory.CONVERSATION_ID, conversationId))
-                .user(request.userInput())
-                .call()
-                .chatResponse();
+        var chatResponse = buildChatPrompt(mode, conversationId, qaAdvisor, request).call().chatResponse();
 
         if (chatResponse == null || chatResponse.getResult() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The AI provider returned an empty response");
@@ -347,13 +388,7 @@ public class ChatController {
         var qaAdvisor = retrievalService.getQuestionAnswerAdvisor(notebookId, request.selectedSourceIds());
 
         final Conversation currentConversation = conversation;
-        var streamResponse = clientFor(mode)
-                .prompt()
-                .advisors(qaAdvisor)
-                .advisors(advisorSpec -> advisorSpec.param(ChatMemory.CONVERSATION_ID, conversationId))
-                .user(request.userInput())
-                .stream()
-                .chatResponse();
+        var streamResponse = buildChatPrompt(mode, conversationId, qaAdvisor, request).stream().chatResponse();
 
         Disposable subscription = streamResponse.doOnNext(chatResponse -> {
             Object docs = chatResponse.getMetadata().get(CustomQuestionAnswerAdvisor.RETRIEVED_DOCUMENTS);
