@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.escruta.core.services.ToolsGenerationService.getOrders;
+
 @Service
 @RequiredArgsConstructor
 public class NotebookService {
@@ -119,12 +121,7 @@ public class NotebookService {
     }
 
     private Sort buildSort(String sort) {
-        return switch (sort) {
-            case "Oldest" -> Sort.by(Sort.Direction.ASC, "createdAt");
-            case "Alphabetical" -> Sort.by(Sort.Direction.ASC, "title");
-            case "Reverse Alphabetical" -> Sort.by(Sort.Direction.DESC, "title");
-            default -> Sort.by(Sort.Direction.DESC, "createdAt");
-        };
+        return getOrders(sort);
     }
 
     @Transactional

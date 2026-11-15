@@ -19,6 +19,12 @@ public interface SourceChunkRepository extends JpaRepository<SourceChunk, UUID> 
 
     List<SourceChunk> findByNotebookIdOrderByChunkIndexAsc(UUID notebookId, Pageable pageable);
 
+    List<SourceChunk> findByNotebookIdAndSourceIdInOrderByChunkIndexAsc(
+            UUID notebookId,
+            List<UUID> sourceIds,
+            Pageable pageable
+    );
+
     @Query(value = """
             SELECT * FROM source_chunks
             WHERE notebook_id = :notebookId

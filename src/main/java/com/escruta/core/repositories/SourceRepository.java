@@ -17,6 +17,14 @@ public interface SourceRepository extends JpaRepository<Source, UUID> {
 
     boolean existsByNotebookId(UUID notebookId);
 
+    @Query("select s.id from Source s where s.notebook.id = :notebookId and s.status = com.escruta.core.entities.enums.SourceStatus.READY order by s.createdAt desc")
+    List<UUID> findReadyIdsByNotebookId(UUID notebookId);
+
+    List<Source> findByNotebookIdAndStatusOrderByCreatedAtDesc(
+            UUID notebookId,
+            com.escruta.core.entities.enums.SourceStatus status
+    );
+
     @Query("select s.link from Source s where s.notebook.id = :notebookId and s.link is not null")
     List<String> findLinksByNotebookId(UUID notebookId);
 

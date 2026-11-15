@@ -37,9 +37,18 @@ public class GenerationJob {
     @Column(nullable = false)
     private JobType type;
 
+    @Column(nullable = false)
+    private String title;
+
+    @Column(name = "has_custom_title", nullable = false)
+    private boolean hasCustomTitle = false;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private JobStatus status = JobStatus.PENDING;
+
+    @Column(columnDefinition = "TEXT")
+    private String options;
 
     @Column(columnDefinition = "TEXT")
     private String result;
@@ -61,14 +70,31 @@ public class GenerationJob {
     private Instant completedAt;
 
     public GenerationJob(Notebook notebook, User user, JobType type) {
+        this(notebook, user, type, type.defaultTitle(), false, null);
+    }
+
+    public GenerationJob(
+            Notebook notebook,
+            User user,
+            JobType type,
+            String title,
+            boolean hasCustomTitle,
+            String options
+    ) {
         this.notebook = notebook;
         this.user = user;
         this.type = type;
+        this.title = title != null && !title.isBlank() ?
+                title.trim() :
+                type.defaultTitle();
+        this.hasCustomTitle = hasCustomTitle;
+        this.options = options;
     }
 
     public void markAsCompleted(String result) {
         this.status = JobStatus.COMPLETED;
         this.result = result;
+        this.errorMessage = null;
         this.completedAt = Instant.now();
     }
 
@@ -78,11 +104,27 @@ public class GenerationJob {
         this.completedAt = Instant.now();
     }
 
+    public void resetForRetry() {
+        this.status = JobStatus.PENDING;
+        this.result = null;
+        this.errorMessage = null;
+        this.completedAt = null;
+    }
+
     public enum JobType {
         MIND_MAP,
         STUDY_GUIDE,
         FLASHCARDS,
-        QUESTIONNAIRE
+        QUESTIONNAIRE;
+
+        public String defaultTitle() {
+            return switch (this) {
+                case MIND_MAP -> "Mind Map";
+                case STUDY_GUIDE -> "Study Guide";
+                case FLASHCARDS -> "Flashcards";
+                case QUESTIONNAIRE -> "Questionnaire";
+            };
+        }
     }
 
     public enum JobStatus {

@@ -3,11 +3,13 @@ package com.escruta.core.repositories;
 import com.escruta.core.entities.GenerationJob;
 import com.escruta.core.entities.GenerationJob.JobStatus;
 import com.escruta.core.entities.GenerationJob.JobType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -16,14 +18,30 @@ import java.util.UUID;
 @Repository
 public interface GenerationJobRepository extends JpaRepository<GenerationJob, UUID> {
     @EntityGraph(attributePaths = {"notebook"})
-    List<GenerationJob> findByNotebookIdAndUserIdOrderByCreatedAtDesc(
+    List<GenerationJob> findByNotebookIdAndUserId(UUID notebookId, UUID userId, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"notebook"})
+    List<GenerationJob> findByNotebookIdAndUserIdAndType(UUID notebookId, UUID userId, JobType type, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"notebook"})
+    List<GenerationJob> findByNotebookIdAndUserIdAndTitleContainingIgnoreCase(
             UUID notebookId,
             UUID userId,
-            org.springframework.data.domain.Pageable pageable
+            String title,
+            Pageable pageable
     );
 
     @EntityGraph(attributePaths = {"notebook"})
-    Optional<GenerationJob> findByIdAndUserId(UUID id, UUID userId);
+    List<GenerationJob> findByNotebookIdAndUserIdAndTypeAndTitleContainingIgnoreCase(
+            UUID notebookId,
+            UUID userId,
+            JobType type,
+            String title,
+            Pageable pageable
+    );
+
+    @EntityGraph(attributePaths = {"notebook"})
+    Optional<GenerationJob> findByIdAndNotebookIdAndUserId(UUID id, UUID notebookId, UUID userId);
 
     @Query("select j.user.id from GenerationJob j where j.id = :jobId")
     Optional<UUID> findUserIdById(UUID jobId);
@@ -39,14 +57,9 @@ public interface GenerationJobRepository extends JpaRepository<GenerationJob, UU
     @Query("SELECT j FROM GenerationJob j WHERE j.notebook.id = :notebookId AND j.user.id = :userId " + "AND j.type = :type AND j.status = 'COMPLETED' ORDER BY j.createdAt DESC LIMIT 1")
     Optional<GenerationJob> findLatestCompletedByType(UUID notebookId, UUID userId, JobType type);
 
-    boolean existsByNotebookIdAndUserIdAndTypeAndStatusIn(
-            UUID notebookId,
-            UUID userId,
-            JobType type,
-            List<JobStatus> statuses
-    );
+    long countByNotebookIdAndUserIdAndStatusIn(UUID notebookId, UUID userId, List<JobStatus> statuses);
 
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             update GenerationJob j

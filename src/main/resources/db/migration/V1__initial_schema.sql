@@ -52,17 +52,20 @@ CREATE TABLE notebooks
 
 CREATE TABLE generation_jobs
 (
-    completed_at  timestamp(6) NULL,
-    created_at    timestamp(6) NULL,
-    updated_at    timestamp(6) NULL,
-    version       BIGINT       NOT NULL DEFAULT 0,
-    id            binary(16)   NOT NULL PRIMARY KEY,
-    notebook_id   binary(16)   NOT NULL,
-    user_id       binary(16)   NOT NULL,
-    error_message text,
-    result        longtext,
-    status        varchar(255) NOT NULL,
-    type          varchar(255) NOT NULL,
+    completed_at     timestamp(6) NULL,
+    created_at       timestamp(6) NULL,
+    updated_at       timestamp(6) NULL,
+    version          BIGINT       NOT NULL DEFAULT 0,
+    has_custom_title boolean      NOT NULL DEFAULT false,
+    id               binary(16)   NOT NULL PRIMARY KEY,
+    notebook_id      binary(16)   NOT NULL,
+    user_id          binary(16)   NOT NULL,
+    title            varchar(255) NOT NULL DEFAULT 'Untitled',
+    options          text,
+    error_message    text,
+    result           longtext,
+    status           varchar(255) NOT NULL,
+    type             varchar(255) NOT NULL,
     CONSTRAINT generation_jobs_status_check CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
     CONSTRAINT generation_jobs_type_check CHECK (type IN ('MIND_MAP', 'STUDY_GUIDE', 'FLASHCARDS', 'QUESTIONNAIRE')),
     CONSTRAINT fk_generation_jobs_users FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
@@ -220,6 +223,9 @@ CREATE INDEX idx_generation_jobs_notebook_user
 
 CREATE INDEX idx_generation_jobs_lookup
     ON generation_jobs (notebook_id, user_id, type, status, created_at DESC);
+
+CREATE INDEX idx_generation_jobs_notebook_user_title
+    ON generation_jobs (notebook_id, user_id, title);
 
 CREATE INDEX idx_source_chunks_notebook_source
     ON source_chunks (notebook_id, source_id);
