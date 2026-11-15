@@ -130,13 +130,15 @@ CREATE TABLE notes
 
 CREATE TABLE messages
 (
-    id                  bigint       NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    conversation_id     varchar(255) NOT NULL,
-    role                varchar(10)  NOT NULL,
-    content             text         NOT NULL,
-    selected_source_ids text,
-    cited_sources       text,
-    created_at          datetime(6)  NOT NULL,
+    id                   bigint       NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    conversation_id      varchar(255) NOT NULL,
+    role                 varchar(10)  NOT NULL,
+    content              text         NOT NULL,
+    selected_source_ids  text,
+    cited_sources        text,
+    thinking_steps       mediumtext,
+    thinking_duration_ms bigint,
+    created_at           datetime(6)  NOT NULL,
     CONSTRAINT messages_role_check CHECK (role IN ('USER', 'ASSISTANT')),
     CONSTRAINT fk_messages_conversations FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE
 );

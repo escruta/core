@@ -288,4 +288,59 @@ class UserJourneyIntegrationTest {
         mockMvc.perform(asyncDispatch(result)).andExpect(status().isOk());
         assertThat(result.getResponse().getContentAsString()).contains("Hola desde el stream");
     }
+
+    @Test
+    @Order(13)
+    @DisplayName("13. Stream and persist agent thinking steps and model thoughts")
+    void step13_streamAndPersistAgentThinking() throws Exception {
+        var options = ChatOptions.builder().build();
+        lenient().when(chatModel.getOptions()).thenReturn(options);
+        AssistantMessage reasoningChunk = AssistantMessage
+                .builder()
+                .content("")
+                .properties(java.util.Map.of("reasoningContent", "Analizando las fuentes..."))
+                .build();
+        AssistantMessage answerChunk = AssistantMessage.builder().content("Respuesta final").build();
+        lenient()
+                .when(chatModel.stream(any(Prompt.class)))
+                .thenReturn(Flux.just(
+                        ChatResponse.builder().generations(List.of(new Generation(reasoningChunk))).build(),
+                        ChatResponse.builder().generations(List.of(new Generation(answerChunk))).build()
+                ));
+
+        MvcResult result = mockMvc
+                .perform(post("/notebooks/" + notebookId + "/chat/stream")
+                        .header("Authorization", "Bearer " + authToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ChatRequest("Explica esto", null, null, null))))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(result)).andExpect(status().isOk());
+        String sseBody = result.getResponse().getContentAsString();
+        assertThat(sseBody).contains("event:step");
+        assertThat(sseBody).contains("event:thought");
+        assertThat(sseBody).contains("Analizando las fuentes...");
+        assertThat(sseBody).contains("Respuesta final");
+
+        String convId = sseBody
+                .lines()
+                .filter(l -> l.contains("\"conversationId\""))
+                .findFirst()
+                .map(l -> l.replaceFirst(".*\"conversationId\"\\s*:\\s*\"([^\"]+)\".*", "$1"))
+                .orElseThrow();
+
+        mockMvc
+                .perform(get("/notebooks/" + notebookId + "/conversations/" + convId).header(
+                        "Authorization",
+                        "Bearer " + authToken
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages[1].content").value("Respuesta final"))
+                .andExpect(jsonPath("$.messages[1].thinkingSteps").isArray())
+                .andExpect(jsonPath("$.messages[1].thinkingSteps[0].type").value("thought"))
+                .andExpect(jsonPath("$.messages[1].thinkingSteps[0].detail").value("Analizando las fuentes..."))
+                .andExpect(jsonPath("$.messages[1].thinkingSteps[1].type").value("text"))
+                .andExpect(jsonPath("$.messages[1].thinkingSteps[1].detail").value("Respuesta final"));
+    }
 }

@@ -5,7 +5,7 @@ plugins {
     id("io.spring.dependency-management") version "1.1.7"
     id("org.flywaydb.flyway") version "12.9.0"
 }
-val springAiVersion = "2.0.0"
+val springAiVersion = "2.0.2"
 
 group = "com.escruta"
 

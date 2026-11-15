@@ -1,24 +1,31 @@
 package com.escruta.core.controllers;
 
+import com.escruta.core.dtos.AgentStep;
 import com.escruta.core.dtos.ChatReplyMessage;
 import com.escruta.core.dtos.ChatRequest;
 import com.escruta.core.dtos.ExampleQuestions;
 import com.escruta.core.dtos.NotebookSummaryDTO;
+import com.escruta.core.dtos.source.SourceResponseDTO;
 import com.escruta.core.dtos.tools.JobStartedResponse;
 import com.escruta.core.entities.Conversation;
 import com.escruta.core.entities.enums.ChatMode;
 import com.escruta.core.entities.enums.ConversationStatus;
+import com.escruta.core.entities.enums.SourceStatus;
 import com.escruta.core.repositories.ConversationRepository;
 import com.escruta.core.repositories.NotebookRepository;
+import com.escruta.core.repositories.SourceChunkRepository;
+import com.escruta.core.repositories.SourceRepository;
+import com.escruta.core.services.AgentTraceRecorder;
 import com.escruta.core.services.ChatMessageService;
-import com.escruta.core.services.CustomQuestionAnswerAdvisor;
 import com.escruta.core.services.ExampleQuestionService;
 import com.escruta.core.services.JpaChatMemory;
+import com.escruta.core.services.NotebookAgentTools;
 import com.escruta.core.services.NotebookContextService;
 import com.escruta.core.services.RateLimitService;
 import com.escruta.core.services.RetrievalService;
 import com.escruta.core.services.SourceJobService;
 import com.escruta.core.services.SseNotificationService;
+import com.escruta.core.services.ThinkTagStreamParser;
 import com.escruta.core.services.UserService;
 import jakarta.annotation.PostConstruct;
 import jakarta.validation.Valid;
@@ -48,14 +55,16 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 
 @RestController
 @RequestMapping("notebooks/{notebookId}")
@@ -64,16 +73,25 @@ import java.util.concurrent.atomic.AtomicReference;
 public class ChatController {
     private static final TypeReference<List<String>> STRING_LIST = new TypeReference<>() {
     };
+    private static final int MAX_MANIFEST_SOURCES = 40;
 
     private static final String UNIFIED_SYSTEM_MESSAGE = """
-            You are a helpful AI assistant. Answer questions using ONLY the provided sources.
+            You are an intelligent research agent assisting the user with their notebook sources. Answer questions using ONLY the provided sources.
+            
+            AGENT WORKFLOW:
+            - You have tools (`searchSources`, `getSourceOverview`, `getNotebookOverview`) to inspect the notebook's sources.
+            - Before answering any question about the sources, ALWAYS use your tools to search or read the relevant sources.
+            - Break complex or multi-part questions into focused searches. If initial results are incomplete, run follow-up searches or read a source's overview.
+            - Never mention internal tool names (such as `searchSources` or `getSourceOverview`) in your final answer.
+            - Keep your internal reasoning concise and focused on concepts; avoid echoing raw UUIDs or `[source_...]` tags inside your thoughts, and reserve `[source_<id>]` citations for your final response.
+            - If the answer cannot be found in the sources after searching, inform the user clearly.
             
             RULES:
             1. Provide clear, comprehensive answers based on the available sources
             2. Write in a natural, conversational tone
             3. Use simple formatting only: **bold**, *italic*, `code`
             4. Focus on directly answering the user's question with the information from the sources
-            5. ALWAYS cite the sources directly in your response text. When using information from a source, add an inline citation using the exact format: [source_sourceId] where sourceId is the ID of the document you are referencing. For example: [source_123e4567-e89b-12d3-a456-426614174000]. Never use formats like [1] or [2]. Do not repeat the same citation consecutively.
+            5. ALWAYS cite the sources directly in your response text. When using information from a source, add an inline citation using the exact format: [source_sourceId] where sourceId is the ID of the passage/document you are referencing. For example: [source_123e4567-e89b-12d3-a456-426614174000]. Never use formats like [1] or [2]. Do not repeat the same citation consecutively.
             6. For mathematical expressions, ALWAYS use LaTeX format with dollar signs:
                - Inline math: $...$ (e.g., $\\alpha$, $|0\\rangle$, $\\psi$)
                - Block math: $$...$$ (e.g., $$|\\psi\\rangle = \\alpha|0\\rangle + \\beta|1\\rangle$$)
@@ -81,7 +99,15 @@ public class ChatController {
             """;
 
     private static final String LEARNING_SYSTEM_MESSAGE = """
-            You are an expert tutor guiding a student to truly understand the subject. Answer using ONLY the provided sources.
+            You are an intelligent tutor agent guiding a student to truly understand the subject. Answer using ONLY the provided sources.
+            
+            AGENT WORKFLOW:
+            - You have tools (`searchSources`, `getSourceOverview`, `getNotebookOverview`) to inspect the notebook's sources.
+            - Before answering any question about the sources, ALWAYS use your tools to search or read the relevant sources.
+            - Break complex questions into focused searches and gather accurate evidence before teaching.
+            - Never mention internal tool names (such as `searchSources` or `getSourceOverview`) in your final answer.
+            - Keep your internal reasoning concise and focused on concepts; avoid echoing raw UUIDs or `[source_...]` tags inside your thoughts, and reserve `[source_<id>]` citations for your final response.
+            - If the topic is not covered in the sources after searching, inform the student clearly.
             
             TEACHING APPROACH (Socratic method):
             1. Do NOT simply give the final answer. Guide the student to it by breaking the reasoning into clear, small steps.
@@ -95,7 +121,7 @@ public class ChatController {
             1. Base every explanation on the available sources and stay accurate
             2. Write in a natural, conversational tone
             3. Use simple formatting only: **bold**, *italic*, `code`
-            4. ALWAYS cite the sources directly in your response text. When using information from a source, add an inline citation using the exact format: [source_sourceId] where sourceId is the ID of the document you are referencing. For example: [source_123e4567-e89b-12d3-a456-426614174000]. Never use formats like [1] or [2]. Do not repeat the same citation consecutively.
+            4. ALWAYS cite the sources directly in your response text. When using information from a source, add an inline citation using the exact format: [source_sourceId] where sourceId is the ID of the passage/document you are referencing. For example: [source_123e4567-e89b-12d3-a456-426614174000]. Never use formats like [1] or [2]. Do not repeat the same citation consecutively.
             5. For mathematical expressions, ALWAYS use LaTeX format with dollar signs:
                - Inline math: $...$ (e.g., $\\alpha$, $|0\\rangle$, $\\psi$)
                - Block math: $$...$$ (e.g., $$|\\psi\\rangle = \\alpha|0\\rangle + \\beta|1\\rangle$$)
@@ -105,6 +131,8 @@ public class ChatController {
     private final RetrievalService retrievalService;
     private final ChatModel chatModel;
     private final NotebookRepository notebookRepository;
+    private final SourceRepository sourceRepository;
+    private final SourceChunkRepository sourceChunkRepository;
     private final ConversationRepository conversationRepository;
     private final JpaChatMemory chatMemory;
     private final ChatMessageService chatMessageService;
@@ -149,24 +177,66 @@ public class ChatController {
     private ChatClient.ChatClientRequestSpec buildChatPrompt(
             ChatMode mode,
             String conversationId,
-            CustomQuestionAnswerAdvisor qaAdvisor,
+            NotebookAgentTools agentTools,
+            List<SourceResponseDTO> scopedSources,
             ChatRequest request
     ) {
-        var promptSpec = clientFor(mode)
-                .prompt()
-                .advisors(qaAdvisor)
-                .advisors(advisorSpec -> advisorSpec.param(ChatMemory.CONVERSATION_ID, conversationId))
-                .user(request.userInput());
+        String baseSystem = mode == ChatMode.LEARNING ?
+                LEARNING_SYSTEM_MESSAGE :
+                UNIFIED_SYSTEM_MESSAGE;
+
+        StringBuilder systemBuilder = new StringBuilder(baseSystem);
+
+        if (!scopedSources.isEmpty()) {
+            systemBuilder.append("\n\nAVAILABLE SOURCES IN SCOPE (").append(scopedSources.size()).append("):\n");
+            int limit = Math.min(scopedSources.size(), MAX_MANIFEST_SOURCES);
+            for (int i = 0; i < limit; i++) {
+                SourceResponseDTO s = scopedSources.get(i);
+                systemBuilder
+                        .append("- ID: ")
+                        .append(s.id())
+                        .append(" | Title: \"")
+                        .append(s.title() != null ?
+                                s.title() :
+                                "Untitled")
+                        .append("\" | Type: ")
+                        .append(s.type())
+                        .append("\n");
+            }
+            if (scopedSources.size() > MAX_MANIFEST_SOURCES) {
+                systemBuilder
+                        .append("- ... and ")
+                        .append(scopedSources.size() - MAX_MANIFEST_SOURCES)
+                        .append(" more sources\n");
+            }
+        }
 
         String preferenceSuffix = buildPreferenceSuffix(request);
         if (!preferenceSuffix.isEmpty()) {
-            String baseSystem = mode == ChatMode.LEARNING ?
-                    LEARNING_SYSTEM_MESSAGE :
-                    UNIFIED_SYSTEM_MESSAGE;
-            promptSpec = promptSpec.system(baseSystem + "\n\nUSER PREFERENCES:\n" + preferenceSuffix);
+            systemBuilder.append("\nUSER PREFERENCES:\n").append(preferenceSuffix);
         }
 
-        return promptSpec;
+        return clientFor(mode)
+                .prompt()
+                .system(systemBuilder.toString())
+                .tools(agentTools)
+                .advisors(advisorSpec -> advisorSpec.param(ChatMemory.CONVERSATION_ID, conversationId))
+                .user(request.userInput());
+    }
+
+    private List<SourceResponseDTO> resolveScopedSources(UUID notebookId, @Nullable List<UUID> selectedSourceIds) {
+        List<SourceResponseDTO> all = sourceRepository.findSummariesByNotebookId(notebookId);
+        if (all.isEmpty()) {
+            return List.of();
+        }
+        Set<UUID> selected = selectedSourceIds == null || selectedSourceIds.isEmpty() ?
+                null :
+                new HashSet<>(selectedSourceIds);
+        return all
+                .stream()
+                .filter(s -> s.status() == SourceStatus.READY)
+                .filter(s -> selected == null || selected.contains(s.id()))
+                .toList();
     }
 
     private static String buildPreferenceSuffix(ChatRequest request) {
@@ -284,36 +354,71 @@ public class ChatController {
             conversation.setTitle(normalizeTitle(null, request.userInput()));
         }
 
-        var qaAdvisor = retrievalService.getQuestionAnswerAdvisor(notebookId, request.selectedSourceIds());
-        var chatResponse = buildChatPrompt(mode, conversationId, qaAdvisor, request).call().chatResponse();
+        List<SourceResponseDTO> scopedSources = resolveScopedSources(notebookId, request.selectedSourceIds());
+        AgentTraceRecorder traceRecorder = new AgentTraceRecorder(null, null);
+
+        NotebookAgentTools agentTools = new NotebookAgentTools(
+                notebookId,
+                request.selectedSourceIds(),
+                retrievalService,
+                sourceRepository,
+                sourceChunkRepository,
+                notebookRepository,
+                notebookContextService,
+                traceRecorder
+        );
+
+        var chatResponse = buildChatPrompt(mode, conversationId, agentTools, scopedSources, request)
+                .call()
+                .chatResponse();
 
         if (chatResponse == null || chatResponse.getResult() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The AI provider returned an empty response");
         }
 
+        var output = chatResponse.getResult().getOutput();
+        Object reasoningObj = output.getMetadata().get("reasoningContent");
+        if (reasoningObj instanceof String reasoning && !reasoning.isEmpty()) {
+            traceRecorder.appendThought(reasoning);
+        }
+
+        StringBuilder answerBuilder = new StringBuilder();
+        ThinkTagStreamParser parser = new ThinkTagStreamParser(
+                traceRecorder::appendThought, delta -> {
+            traceRecorder.appendAnswer(delta);
+            answerBuilder.append(delta);
+        }
+        );
+        parser.accept(output.getText());
+        parser.flush();
+        traceRecorder.complete();
+
         conversation.setMode(mode);
         conversationRepository.save(conversation);
         notebookRepository.touchLastActivity(notebookId);
 
-        List<Document> documents = chatResponse
-                .getMetadata()
-                .getOrDefault(CustomQuestionAnswerAdvisor.RETRIEVED_DOCUMENTS, List.of());
+        List<ChatReplyMessage.CitedSource> citedSources = toCitedSources(agentTools.getCollectedDocuments());
+        String assistantContent = answerBuilder.toString();
+        List<AgentStep> thinkingSteps = traceRecorder.getStepsSnapshot();
+        long thinkingDurationMs = traceRecorder.getTotalDurationMs();
 
-        List<ChatReplyMessage.CitedSource> citedSources = toCitedSources(documents);
-        String assistantContent = Objects.requireNonNull(chatResponse.getResult().getOutput().getText());
         chatMessageService.saveConversationTurn(
                 conversation,
                 request.userInput(),
                 request.selectedSourceIds(),
                 assistantContent,
-                citedSources
+                citedSources,
+                thinkingSteps,
+                thinkingDurationMs
         );
 
         return ResponseEntity.ok(new ChatReplyMessage(
                 assistantContent,
                 conversationId,
                 conversation.getTitle(),
-                citedSources
+                citedSources,
+                thinkingSteps,
+                thinkingDurationMs
         ));
     }
 
@@ -339,25 +444,21 @@ public class ChatController {
         }
         boolean isNewConversation = existingConversation == null;
 
-        SseEmitter emitter = new SseEmitter(300_000L);
-        AtomicBoolean emitterActive = new AtomicBoolean(true);
+        StreamSink sink = new StreamSink(new SseEmitter(300_000L));
         AtomicBoolean terminal = new AtomicBoolean(false);
         AtomicReference<Disposable> subscriptionRef = new AtomicReference<>();
 
-        emitter.onCompletion(() -> {
-            emitterActive.set(false);
+        sink.emitter().onCompletion(() -> {
+            sink.markInactive();
             disposeQuietly(subscriptionRef.get());
         });
-        emitter.onTimeout(() -> {
-            emitterActive.set(false);
+        sink.emitter().onTimeout(() -> {
+            sink.markInactive();
             disposeQuietly(subscriptionRef.get());
-            try {
-                emitter.complete();
-            } catch (IllegalStateException ignored) {
-            }
+            sink.completeQuietly();
         });
-        emitter.onError(_ -> {
-            emitterActive.set(false);
+        sink.emitter().onError(_ -> {
+            sink.markInactive();
             disposeQuietly(subscriptionRef.get());
         });
 
@@ -377,41 +478,66 @@ public class ChatController {
 
         publishConversationUpdated(ownerId, notebookId, conversation);
 
-        trySendEvent(
-                emitter,
-                emitterActive,
-                SseEmitter.event().name("conversation").data(Map.of("conversationId", conversationId))
+        sink.send(SseEmitter.event().name("conversation").data(Map.of("conversationId", conversationId)));
+
+        AgentTraceRecorder traceRecorder = new AgentTraceRecorder(
+                step -> sink.send(SseEmitter.event().name("step").data(step)),
+                (stepId, delta) -> sink.send(SseEmitter
+                        .event()
+                        .name("thought")
+                        .data(Map.of("stepId", stepId, "delta", delta)))
         );
 
-        AtomicReference<List<Document>> retrievedDocumentsRef = new AtomicReference<>(List.of());
+        List<SourceResponseDTO> scopedSources = resolveScopedSources(notebookId, request.selectedSourceIds());
+
+        NotebookAgentTools agentTools = new NotebookAgentTools(
+                notebookId,
+                request.selectedSourceIds(),
+                retrievalService,
+                sourceRepository,
+                sourceChunkRepository,
+                notebookRepository,
+                notebookContextService,
+                traceRecorder
+        );
+
         StringBuffer accumulatedText = new StringBuffer();
-        var qaAdvisor = retrievalService.getQuestionAnswerAdvisor(notebookId, request.selectedSourceIds());
+        ThinkTagStreamParser thinkParser = new ThinkTagStreamParser(
+                traceRecorder::appendThought, answerDelta -> {
+            if (answerDelta == null || answerDelta.isEmpty()) {
+                return;
+            }
+            traceRecorder.appendAnswer(answerDelta);
+            accumulatedText.append(answerDelta);
+            boolean sent = sink.send(SseEmitter.event().name("token").data(answerDelta));
+            if (!sent) {
+                disposeQuietly(subscriptionRef.get());
+            }
+        }
+        );
 
         final Conversation currentConversation = conversation;
-        var streamResponse = buildChatPrompt(mode, conversationId, qaAdvisor, request).stream().chatResponse();
+        var streamResponse = buildChatPrompt(mode, conversationId, agentTools, scopedSources, request)
+                .stream()
+                .chatResponse();
 
         Disposable subscription = streamResponse.doOnNext(chatResponse -> {
-            Object docs = chatResponse.getMetadata().get(CustomQuestionAnswerAdvisor.RETRIEVED_DOCUMENTS);
-            if (docs instanceof List<?> list && !list.isEmpty() && retrievedDocumentsRef.get().isEmpty()) {
-                retrievedDocumentsRef.set(safelyCastDocuments(list));
-            }
-
             if (chatResponse.getResult() == null) {
                 return;
             }
-            String chunk = chatResponse.getResult().getOutput().getText();
+            var output = chatResponse.getResult().getOutput();
+            Object reasoningObj = output.getMetadata().get("reasoningContent");
+            if (reasoningObj instanceof String reasoning && !reasoning.isEmpty()) {
+                traceRecorder.appendThought(reasoning);
+            }
+            String chunk = output.getText();
             if (chunk != null && !chunk.isEmpty()) {
-                accumulatedText.append(chunk);
-                boolean sent = trySendEvent(emitter, emitterActive, SseEmitter.event().name("token").data(chunk));
-                if (!sent) {
-                    disposeQuietly(subscriptionRef.get());
-                }
+                thinkParser.accept(chunk);
             }
         }).doOnError(error -> Schedulers.boundedElastic().schedule(() -> {
             if (terminal.compareAndSet(false, true)) {
                 handleStreamError(
-                        emitter,
-                        emitterActive,
+                        sink,
                         ownerId,
                         notebookId,
                         conversationId,
@@ -421,45 +547,50 @@ public class ChatController {
                         error
                 );
             }
-        })).doOnComplete(() -> Schedulers.boundedElastic().schedule(() -> finalizeStream(
-                terminal,
-                emitter,
-                emitterActive,
-                ownerId,
-                notebookId,
-                request.userInput(),
-                request.selectedSourceIds(),
-                conversationId,
-                isNewConversation,
-                retrievedDocumentsRef.get(),
-                accumulatedText.toString(),
-                mode
-        ))).doFinally(signal -> {
+        })).doOnComplete(() -> Schedulers.boundedElastic().schedule(() -> {
+            thinkParser.flush();
+            traceRecorder.complete();
+            finalizeStream(
+                    terminal,
+                    sink,
+                    ownerId,
+                    notebookId,
+                    request.userInput(),
+                    request.selectedSourceIds(),
+                    conversationId,
+                    isNewConversation,
+                    agentTools.getCollectedDocuments(),
+                    accumulatedText.toString(),
+                    traceRecorder.getStepsSnapshot(),
+                    traceRecorder.getTotalDurationMs(),
+                    mode
+            );
+        })).doFinally(signal -> {
             if (signal == reactor.core.publisher.SignalType.CANCEL) {
-                Schedulers.boundedElastic().schedule(() -> handleStreamCancelled(
-                        terminal,
-                        emitter,
-                        emitterActive,
-                        ownerId,
-                        notebookId,
-                        conversationId,
-                        currentConversation,
-                        request.userInput(),
-                        request.selectedSourceIds(),
-                        retrievedDocumentsRef.get(),
-                        accumulatedText.toString(),
-                        mode
-                ));
+                Schedulers.boundedElastic().schedule(() -> {
+                    thinkParser.flush();
+                    traceRecorder.complete();
+                    handleStreamCancelled(
+                            terminal,
+                            sink,
+                            ownerId,
+                            notebookId,
+                            conversationId,
+                            currentConversation,
+                            request.userInput(),
+                            request.selectedSourceIds(),
+                            agentTools.getCollectedDocuments(),
+                            accumulatedText.toString(),
+                            traceRecorder.getStepsSnapshot(),
+                            traceRecorder.getTotalDurationMs(),
+                            mode
+                    );
+                });
             }
         }).subscribe();
 
         subscriptionRef.set(subscription);
-        return emitter;
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<Document> safelyCastDocuments(List<?> list) {
-        return (List<Document>) list;
+        return sink.emitter();
     }
 
     private List<ChatReplyMessage.CitedSource> toCitedSources(List<Document> documents) {
@@ -473,8 +604,7 @@ public class ChatController {
 
     private void finalizeStream(
             AtomicBoolean terminal,
-            SseEmitter emitter,
-            AtomicBoolean emitterActive,
+            StreamSink sink,
             @Nullable UUID ownerId,
             UUID notebookId,
             String userInput,
@@ -483,6 +613,8 @@ public class ChatController {
             boolean isNewConversation,
             List<Document> retrievedDocuments,
             String assistantContent,
+            List<AgentStep> thinkingSteps,
+            long thinkingDurationMs,
             ChatMode mode
     ) {
         if (!terminal.compareAndSet(false, true)) {
@@ -501,7 +633,7 @@ public class ChatController {
             }
             conversation.setMode(mode);
             conversation.setStatus(ConversationStatus.IDLE);
-            conversation.setHasUnseenReply(!emitterActive.get());
+            conversation.setHasUnseenReply(!sink.isActive());
             conversation = conversationRepository.save(conversation);
             notebookRepository.touchLastActivity(notebookId);
 
@@ -511,40 +643,34 @@ public class ChatController {
                     userInput,
                     selectedSourceIds,
                     assistantContent,
-                    citedSources
+                    citedSources,
+                    thinkingSteps,
+                    thinkingDurationMs
             );
 
-            trySendEvent(emitter, emitterActive, SseEmitter.event().name("sources").data(citedSources));
+            sink.send(SseEmitter.event().name("sources").data(citedSources));
             if (isNewConversation) {
-                trySendEvent(emitter, emitterActive, SseEmitter.event().name("title").data(conversation.getTitle()));
+                sink.send(SseEmitter.event().name("title").data(conversation.getTitle()));
             }
-            boolean sentDone = trySendEvent(emitter, emitterActive, SseEmitter.event().name("done").data(""));
+            boolean sentDone = sink.send(SseEmitter
+                    .event()
+                    .name("done")
+                    .data(Map.of("durationMs", thinkingDurationMs)));
             if (!sentDone && !conversation.isHasUnseenReply()) {
                 conversation.setHasUnseenReply(true);
                 conversation = conversationRepository.save(conversation);
             }
-            tryComplete(emitter, emitterActive);
+            sink.complete();
 
             publishConversationUpdated(ownerId, notebookId, conversation);
         } catch (Exception e) {
             log.error("Error finalizing chat stream for conversation {}", conversationId, e);
-            handleStreamError(
-                    emitter,
-                    emitterActive,
-                    ownerId,
-                    notebookId,
-                    conversationId,
-                    userInput,
-                    selectedSourceIds,
-                    false,
-                    e
-            );
+            handleStreamError(sink, ownerId, notebookId, conversationId, userInput, selectedSourceIds, false, e);
         }
     }
 
     private void handleStreamError(
-            SseEmitter emitter,
-            AtomicBoolean emitterActive,
+            StreamSink sink,
             @Nullable UUID ownerId,
             UUID notebookId,
             String conversationId,
@@ -570,13 +696,12 @@ public class ChatController {
         } catch (Exception e) {
             log.warn("Could not record failure for conversation {}: {}", conversationId, e.getMessage());
         }
-        sendErrorAndComplete(emitter, emitterActive, error);
+        sendErrorAndComplete(sink, error);
     }
 
     private void handleStreamCancelled(
             AtomicBoolean terminal,
-            SseEmitter emitter,
-            AtomicBoolean emitterActive,
+            StreamSink sink,
             @Nullable UUID ownerId,
             UUID notebookId,
             String conversationId,
@@ -585,6 +710,8 @@ public class ChatController {
             List<UUID> selectedSourceIds,
             List<Document> retrievedDocuments,
             String assistantContent,
+            List<AgentStep> thinkingSteps,
+            long thinkingDurationMs,
             ChatMode mode
     ) {
         if (!terminal.compareAndSet(false, true)) {
@@ -607,14 +734,16 @@ public class ChatController {
                         userInput,
                         selectedSourceIds,
                         assistantContent,
-                        toCitedSources(retrievedDocuments)
+                        toCitedSources(retrievedDocuments),
+                        thinkingSteps,
+                        thinkingDurationMs
                 );
             } else {
                 chatMessageService.saveUserMessage(conversation, userInput, selectedSourceIds);
             }
 
-            emitterActive.set(false);
-            completeQuietly(emitter);
+            sink.markInactive();
+            sink.completeQuietly();
             publishConversationUpdated(ownerId, notebookId, conversation);
         } catch (Exception e) {
             log.warn("Could not record cancellation for conversation {}: {}", conversationId, e.getMessage());
@@ -647,39 +776,9 @@ public class ChatController {
         sseNotificationService.publish(ownerId, "conversation.updated", payload);
     }
 
-    private boolean trySendEvent(SseEmitter emitter, AtomicBoolean emitterActive, SseEmitter.SseEventBuilder event) {
-        if (!emitterActive.get()) {
-            return false;
-        }
-        try {
-            emitter.send(event);
-            return true;
-        } catch (Exception e) {
-            emitterActive.set(false);
-            return false;
-        }
-    }
-
-    private void tryComplete(SseEmitter emitter, AtomicBoolean emitterActive) {
-        if (!emitterActive.getAndSet(false)) {
-            return;
-        }
-        try {
-            emitter.complete();
-        } catch (IllegalStateException ignored) {
-        }
-    }
-
     private void disposeQuietly(@Nullable Disposable disposable) {
         if (disposable != null && !disposable.isDisposed()) {
             disposable.dispose();
-        }
-    }
-
-    private void completeQuietly(SseEmitter emitter) {
-        try {
-            emitter.complete();
-        } catch (IllegalStateException ignored) {
         }
     }
 
@@ -695,7 +794,7 @@ public class ChatController {
     }
 
     /**
-     * Cheap, deterministic title generation. The previous implementation made an
+     * Inexpensive, deterministic title generation. The previous implementation made an
      * extra blocking LLM call for every new conversation.
      */
     private String generateTitle(String userInput) {
@@ -713,12 +812,70 @@ public class ChatController {
         return cleaned.substring(0, end).trim();
     }
 
-    private void sendErrorAndComplete(SseEmitter emitter, AtomicBoolean emitterActive, Throwable error) {
+    private void sendErrorAndComplete(StreamSink sink, Throwable error) {
         String message = error.getMessage() != null ?
                 error.getMessage() :
                 "Error generating response";
-        trySendEvent(emitter, emitterActive, SseEmitter.event().name("error").data(message));
-        tryComplete(emitter, emitterActive);
-        completeQuietly(emitter);
+        sink.send(SseEmitter.event().name("error").data(message));
+        sink.complete();
+        sink.completeQuietly();
+    }
+
+    private static final class StreamSink {
+        private final SseEmitter emitter;
+        private final AtomicBoolean active = new AtomicBoolean(true);
+        private final ReentrantLock lock = new ReentrantLock();
+
+        private StreamSink(SseEmitter emitter) {
+            this.emitter = emitter;
+        }
+
+        private SseEmitter emitter() {
+            return emitter;
+        }
+
+        private boolean isActive() {
+            return active.get();
+        }
+
+        private void markInactive() {
+            active.set(false);
+        }
+
+        private boolean send(SseEmitter.SseEventBuilder event) {
+            if (!active.get()) {
+                return false;
+            }
+            lock.lock();
+            try {
+                if (!active.get()) {
+                    return false;
+                }
+                emitter.send(event);
+                return true;
+            } catch (Exception e) {
+                active.set(false);
+                return false;
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        private void complete() {
+            if (!active.getAndSet(false)) {
+                return;
+            }
+            completeQuietly();
+        }
+
+        private void completeQuietly() {
+            lock.lock();
+            try {
+                emitter.complete();
+            } catch (IllegalStateException ignored) {
+            } finally {
+                lock.unlock();
+            }
+        }
     }
 }

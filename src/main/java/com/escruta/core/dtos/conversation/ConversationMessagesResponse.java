@@ -1,5 +1,6 @@
 package com.escruta.core.dtos.conversation;
 
+import com.escruta.core.dtos.AgentStep;
 import com.escruta.core.dtos.ChatReplyMessage;
 import com.escruta.core.entities.enums.ChatMode;
 import com.escruta.core.entities.enums.ConversationStatus;
@@ -17,7 +18,9 @@ public record ConversationMessagesResponse(
             String content,
             String type,
             List<ChatReplyMessage.CitedSource> citedSources,
-            Integer selectedSourcesCount
+            Integer selectedSourcesCount,
+            List<AgentStep> thinkingSteps,
+            Long thinkingDurationMs
     ) {
     }
 }

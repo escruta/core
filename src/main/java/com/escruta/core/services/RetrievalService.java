@@ -9,13 +9,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+
+import static com.escruta.core.services.NotebookAgentTools.getDocument;
 
 @Service
 @RequiredArgsConstructor
@@ -23,14 +23,6 @@ public class RetrievalService {
     private static final int FALLBACK_SCAN_SIZE = 200;
 
     private final SourceChunkRepository chunkRepository;
-
-    public CustomQuestionAnswerAdvisor getQuestionAnswerAdvisor(UUID notebookId, List<UUID> selectedSourceIds) {
-        return CustomQuestionAnswerAdvisor
-                .builder(this, notebookId)
-                .selectedSourceIds(selectedSourceIds)
-                .topK(5)
-                .build();
-    }
 
     public List<Document> search(UUID notebookId, List<UUID> selectedSourceIds, String query, int limit) {
         if (query == null || query.isBlank() || limit <= 0) {
@@ -139,23 +131,7 @@ public class RetrievalService {
     }
 
     private static Document toDocument(SourceChunk chunk) {
-        Map<String, Object> metadata = new HashMap<>();
-        metadata.put("sourceId", chunk.getSourceId().toString());
-        metadata.put("notebookId", chunk.getNotebookId().toString());
-        metadata.put(
-                "title",
-                chunk.getTitle() != null ?
-                        chunk.getTitle() :
-                        "Untitled"
-        );
-        metadata.put(
-                "link",
-                chunk.getLink() != null ?
-                        chunk.getLink() :
-                        ""
-        );
-        metadata.put("chunkIndex", String.valueOf(chunk.getChunkIndex()));
-        return new Document(chunk.getId().toString(), chunk.getContent(), metadata);
+        return getDocument(chunk);
     }
 
     private record ScoredChunk(

@@ -35,6 +35,11 @@ public class ChatMessage {
     @Column(columnDefinition = "TEXT")
     private String citedSources;
 
+    @Column(columnDefinition = "MEDIUMTEXT")
+    private String thinkingSteps;
+
+    private Long thinkingDurationMs;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Timestamp createdAt;

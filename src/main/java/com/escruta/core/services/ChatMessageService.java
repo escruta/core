@@ -1,5 +1,6 @@
 package com.escruta.core.services;
 
+import com.escruta.core.dtos.AgentStep;
 import com.escruta.core.dtos.ChatReplyMessage;
 import com.escruta.core.entities.ChatMessage;
 import com.escruta.core.entities.Conversation;
@@ -22,6 +23,8 @@ public class ChatMessageService {
     };
     private static final TypeReference<List<ChatReplyMessage.CitedSource>> CITED_SOURCE_LIST = new TypeReference<>() {
     };
+    private static final TypeReference<List<AgentStep>> AGENT_STEP_LIST = new TypeReference<>() {
+    };
     private static final int MAX_STORED_CITATION_CHARS = 500;
 
     private final ChatMessageRepository chatMessageRepository;
@@ -43,13 +46,19 @@ public class ChatMessageService {
     public void saveAssistantMessage(
             Conversation conversation,
             String assistantContent,
-            List<ChatReplyMessage.CitedSource> citedSources
+            List<ChatReplyMessage.CitedSource> citedSources,
+            List<AgentStep> thinkingSteps,
+            Long thinkingDurationMs
     ) {
         ChatMessage assistantMessage = new ChatMessage();
         assistantMessage.setConversation(conversation);
         assistantMessage.setRole("ASSISTANT");
         assistantMessage.setContent(assistantContent);
         assistantMessage.setCitedSources(toJson(truncateForStorage(citedSources)));
+        if (thinkingSteps != null && !thinkingSteps.isEmpty()) {
+            assistantMessage.setThinkingSteps(toJson(thinkingSteps));
+        }
+        assistantMessage.setThinkingDurationMs(thinkingDurationMs);
         chatMessageRepository.save(assistantMessage);
     }
 
@@ -77,10 +86,12 @@ public class ChatMessageService {
             String userContent,
             List<UUID> selectedSourceIds,
             String assistantContent,
-            List<ChatReplyMessage.CitedSource> citedSources
+            List<ChatReplyMessage.CitedSource> citedSources,
+            List<AgentStep> thinkingSteps,
+            Long thinkingDurationMs
     ) {
         saveUserMessage(conversation, userContent, selectedSourceIds);
-        saveAssistantMessage(conversation, assistantContent, citedSources);
+        saveAssistantMessage(conversation, assistantContent, citedSources, thinkingSteps, thinkingDurationMs);
     }
 
     @Transactional(readOnly = true)
@@ -110,6 +121,10 @@ public class ChatMessageService {
 
     public List<ChatReplyMessage.CitedSource> deserializeCitedSources(ChatMessage message) {
         return fromJson(message.getCitedSources(), CITED_SOURCE_LIST, List.of());
+    }
+
+    public List<AgentStep> deserializeThinkingSteps(ChatMessage message) {
+        return fromJson(message.getThinkingSteps(), AGENT_STEP_LIST, List.of());
     }
 
     private String toJson(Object value) {

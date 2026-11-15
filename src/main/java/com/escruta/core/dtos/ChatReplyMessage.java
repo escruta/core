@@ -6,9 +6,10 @@ public record ChatReplyMessage(
         String content,
         String conversationId,
         String conversationTitle,
-        List<CitedSource> citedSources
+        List<CitedSource> citedSources,
+        List<AgentStep> thinkingSteps,
+        Long thinkingDurationMs
 ) {
-
     public record CitedSource(
             String id,
             String documentId,

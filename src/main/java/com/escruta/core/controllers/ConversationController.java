@@ -89,15 +89,14 @@ class ConversationController {
 
         List<ChatMessage> messages = chatMessageService.getConversationMessages(conversationId);
 
-        var messageResponses = messages
-                .stream()
-                .map(m -> new ConversationMessagesResponse.MessageResponse(
-                        m.getContent(),
-                        m.getRole(),
-                        chatMessageService.deserializeCitedSources(m),
-                        chatMessageService.deserializeSelectedSourceIds(m).size()
-                ))
-                .toList();
+        var messageResponses = messages.stream().map(m -> new ConversationMessagesResponse.MessageResponse(
+                m.getContent(),
+                m.getRole(),
+                chatMessageService.deserializeCitedSources(m),
+                chatMessageService.deserializeSelectedSourceIds(m).size(),
+                chatMessageService.deserializeThinkingSteps(m),
+                m.getThinkingDurationMs()
+        )).toList();
 
         return ResponseEntity.ok(new ConversationMessagesResponse(
                 conversationId,
@@ -112,7 +111,8 @@ class ConversationController {
     ResponseEntity<ConversationResponse> renameConversation(
             @PathVariable UUID notebookId,
             @PathVariable String conversationId,
-            @Valid @RequestBody ConversationUpdateDTO conversationUpdateDTO
+            @Valid @RequestBody
+            ConversationUpdateDTO conversationUpdateDTO
     ) {
         var conversation = conversationRepository.findByIdAndNotebookId(conversationId, notebookId).orElse(null);
 
