@@ -5,6 +5,7 @@ import com.escruta.core.dtos.source.SourceResponseDTO;
 import com.escruta.core.entities.GenerationJob;
 import com.escruta.core.entities.Notebook;
 import com.escruta.core.entities.Source;
+import com.escruta.core.entities.SourceChunk;
 import com.escruta.core.entities.SourceJob;
 import com.escruta.core.entities.User;
 import com.escruta.core.entities.enums.SourceStatus;
@@ -12,6 +13,7 @@ import com.escruta.core.entities.enums.SourceType;
 import com.escruta.core.repositories.GenerationJobRepository;
 import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.repositories.OffsetPageRequest;
+import com.escruta.core.repositories.SourceChunkRepository;
 import com.escruta.core.repositories.SourceJobRepository;
 import com.escruta.core.repositories.SourceRepository;
 import com.escruta.core.repositories.UserRepository;
@@ -19,6 +21,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -37,6 +40,8 @@ class RepositoryQueryIntegrationTest {
     private NotebookRepository notebookRepository;
     @Autowired
     private SourceRepository sourceRepository;
+    @Autowired
+    private SourceChunkRepository sourceChunkRepository;
     @Autowired
     private GenerationJobRepository generationJobRepository;
     @Autowired
@@ -108,5 +113,41 @@ class RepositoryQueryIntegrationTest {
         assertThat(notebookRepository.touchLastActivity(notebook.getId())).isZero();
 
         assertThat(sourceRepository.clearSummaryByIdAndNotebookId(source.getId(), notebook.getId())).isEqualTo(1);
+
+        SourceChunk chunk0 = new SourceChunk();
+        chunk0.setNotebookId(notebook.getId());
+        chunk0.setSourceId(source.getId());
+        chunk0.setChunkIndex(0);
+        chunk0.setTitle("Query Source");
+        chunk0.setContent("Introductory context.");
+        chunk0 = sourceChunkRepository.save(chunk0);
+
+        SourceChunk chunk1 = new SourceChunk();
+        chunk1.setNotebookId(notebook.getId());
+        chunk1.setSourceId(source.getId());
+        chunk1.setChunkIndex(1);
+        chunk1.setTitle("Query Source");
+        chunk1.setContent("Exact phrase: HTTP 429 Too Many Requests.");
+        chunk1 = sourceChunkRepository.save(chunk1);
+
+        assertThat(sourceChunkRepository.countByNotebookIdAndSourceId(notebook.getId(), source.getId())).isEqualTo(2);
+        assertThat(sourceChunkRepository.findByIdAndNotebookId(chunk1.getId(), notebook.getId())).isPresent();
+        assertThat(sourceChunkRepository.findByNotebookIdAndSourceIdAndChunkIndexBetweenOrderByChunkIndexAsc(
+                notebook.getId(),
+                source.getId(),
+                0,
+                1
+        )).hasSize(2);
+        assertThat(sourceChunkRepository.findExactByNotebook(notebook.getId(), "429 too many", PageRequest.of(0, 5)))
+                .extracting(SourceChunk::getId)
+                .containsExactly(chunk1.getId());
+        assertThat(sourceChunkRepository.findExactByNotebookAndSources(
+                notebook.getId(),
+                List.of(source.getId()),
+                "introductory",
+                PageRequest.of(0, 5)
+        ))
+                .extracting(SourceChunk::getId)
+                .containsExactly(chunk0.getId());
     }
 }

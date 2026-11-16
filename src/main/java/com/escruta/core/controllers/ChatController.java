@@ -14,6 +14,7 @@ import com.escruta.core.entities.enums.SourceStatus;
 import com.escruta.core.repositories.ConversationRepository;
 import com.escruta.core.repositories.NotebookRepository;
 import com.escruta.core.repositories.SourceChunkRepository;
+import com.escruta.core.repositories.SourceGroupRepository;
 import com.escruta.core.repositories.SourceRepository;
 import com.escruta.core.services.AgentTraceRecorder;
 import com.escruta.core.services.ChatMessageService;
@@ -79,10 +80,19 @@ public class ChatController {
             You are an intelligent research agent assisting the user with their notebook sources. Answer questions using ONLY the provided sources.
             
             AGENT WORKFLOW:
-            - You have tools (`searchSources`, `getSourceOverview`, `getNotebookOverview`) to inspect the notebook's sources.
+            - You have tools to inspect the notebook's sources and perform exact calculations:
+              * `searchSources`: keyword/concept search across the selected sources.
+              * `searchExactMatch`: literal case-insensitive substring search for exact phrases, quotes, acronyms, code identifiers, or symbols.
+              * `getSourceOverview`: read a source's summary and opening chunks using its Document UUID.
+              * `readSourceChunks`: read consecutive chunks from a specific Document UUID starting at a 0-based chunk index.
+              * `getSurroundingChunks`: read passages before and after a specific passage UUID (`Source ID`) to recover full context.
+              * `listSources`: list available sources and source groups in scope (especially useful when there are many sources or groups).
+              * `getNotebookOverview`: inspect the notebook-level summary and main topics.
+              * `calculate`: deterministic evaluator for arithmetic, percentages, averages, powers, logs, trigonometry, etc. Always use it instead of mental arithmetic.
             - Before answering any question about the sources, ALWAYS use your tools to search or read the relevant sources.
-            - Break complex or multi-part questions into focused searches. If initial results are incomplete, run follow-up searches or read a source's overview.
-            - Never mention internal tool names (such as `searchSources` or `getSourceOverview`) in your final answer.
+            - Break complex or multi-part questions into focused searches. If a passage seems cut off or incomplete, use `getSurroundingChunks` or `readSourceChunks` to read adjacent sections.
+            - Note the distinction in tool outputs: `Source ID: <uuid>` is the passage UUID used in `[source_<uuid>]` citations and `getSurroundingChunks`; `Document ID: <uuid>` is the parent source UUID used in `getSourceOverview`, `readSourceChunks`, and `searchExactMatch`.
+            - Never mention internal tool names (such as `searchSources`, `searchExactMatch`, `getSourceOverview`, `readSourceChunks`, `getSurroundingChunks`, `listSources`, `getNotebookOverview`, or `calculate`) in your final answer.
             - Keep your internal reasoning concise and focused on concepts; avoid echoing raw UUIDs or `[source_...]` tags inside your thoughts, and reserve `[source_<id>]` citations for your final response.
             - If the answer cannot be found in the sources after searching, inform the user clearly.
             
@@ -102,10 +112,19 @@ public class ChatController {
             You are an intelligent tutor agent guiding a student to truly understand the subject. Answer using ONLY the provided sources.
             
             AGENT WORKFLOW:
-            - You have tools (`searchSources`, `getSourceOverview`, `getNotebookOverview`) to inspect the notebook's sources.
+            - You have tools to inspect the notebook's sources and perform exact calculations:
+              * `searchSources`: keyword/concept search across the selected sources.
+              * `searchExactMatch`: literal case-insensitive substring search for exact phrases, quotes, acronyms, code identifiers, or symbols.
+              * `getSourceOverview`: read a source's summary and opening chunks using its Document UUID.
+              * `readSourceChunks`: read consecutive chunks from a specific Document UUID starting at a 0-based chunk index.
+              * `getSurroundingChunks`: read passages before and after a specific passage UUID (`Source ID`) to recover full context.
+              * `listSources`: list available sources and source groups in scope (especially useful when there are many sources or groups).
+              * `getNotebookOverview`: inspect the notebook-level summary and main topics.
+              * `calculate`: deterministic evaluator for arithmetic, percentages, averages, powers, logs, trigonometry, etc. Always use it to verify numeric examples or calculations instead of mental math.
             - Before answering any question about the sources, ALWAYS use your tools to search or read the relevant sources.
-            - Break complex questions into focused searches and gather accurate evidence before teaching.
-            - Never mention internal tool names (such as `searchSources` or `getSourceOverview`) in your final answer.
+            - Break complex questions into focused searches and gather accurate evidence before teaching. If a passage seems cut off, use `getSurroundingChunks` or `readSourceChunks` to read the surrounding context.
+            - Note the distinction in tool outputs: `Source ID: <uuid>` is the passage UUID used in `[source_<uuid>]` citations and `getSurroundingChunks`; `Document ID: <uuid>` is the parent source UUID used in `getSourceOverview`, `readSourceChunks`, and `searchExactMatch`.
+            - Never mention internal tool names (such as `searchSources`, `searchExactMatch`, `getSourceOverview`, `readSourceChunks`, `getSurroundingChunks`, `listSources`, `getNotebookOverview`, or `calculate`) in your final answer.
             - Keep your internal reasoning concise and focused on concepts; avoid echoing raw UUIDs or `[source_...]` tags inside your thoughts, and reserve `[source_<id>]` citations for your final response.
             - If the topic is not covered in the sources after searching, inform the student clearly.
             
@@ -132,6 +151,7 @@ public class ChatController {
     private final ChatModel chatModel;
     private final NotebookRepository notebookRepository;
     private final SourceRepository sourceRepository;
+    private final SourceGroupRepository sourceGroupRepository;
     private final SourceChunkRepository sourceChunkRepository;
     private final ConversationRepository conversationRepository;
     private final JpaChatMemory chatMemory;
@@ -365,6 +385,7 @@ public class ChatController {
                 sourceChunkRepository,
                 notebookRepository,
                 notebookContextService,
+                sourceGroupRepository,
                 traceRecorder
         );
 
@@ -498,6 +519,7 @@ public class ChatController {
                 sourceChunkRepository,
                 notebookRepository,
                 notebookContextService,
+                sourceGroupRepository,
                 traceRecorder
         );
 
