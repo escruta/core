@@ -1,18 +1,15 @@
 package com.escruta.core.services;
 
 import com.escruta.core.entities.ChatMessage;
-import com.escruta.core.repositories.ChatMessageRepository;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 @Component
@@ -20,7 +17,7 @@ import java.util.List;
 public class JpaChatMemory implements ChatMemory {
     private static final int DEFAULT_MAX_MESSAGES = 20;
 
-    private final ChatMessageRepository chatMessageRepository;
+    private final ChatMessageService chatMessageService;
 
     @Override
     public void add(@NonNull String conversationId, @NonNull List<Message> messages) {
@@ -35,26 +32,28 @@ public class JpaChatMemory implements ChatMemory {
         if (conversationId == null || conversationId.isBlank()) {
             return List.of();
         }
+        List<ChatMessage> recent = chatMessageService.getConversationMessages(conversationId, maxMessages);
+        return recent.stream().map(this::toAiMessage).toList();
+    }
 
-        List<ChatMessage> recent = chatMessageRepository.findByConversation_IdOrderByIdDesc(
-                conversationId,
-                PageRequest.of(0, maxMessages)
-        );
-        if (recent.isEmpty()) {
+    public List<Message> getAncestors(String conversationId, @Nullable Long leafMessageId) {
+        return getAncestors(conversationId, leafMessageId, DEFAULT_MAX_MESSAGES);
+    }
+
+    public List<Message> getAncestors(String conversationId, @Nullable Long leafMessageId, int maxMessages) {
+        if (conversationId == null || conversationId.isBlank() || leafMessageId == null) {
             return List.of();
         }
-
-        Collections.reverse(recent);
-        List<Message> messages = new ArrayList<>(recent.size());
-        for (ChatMessage message : recent) {
-            messages.add(toAiMessage(message));
-        }
-        return messages;
+        return chatMessageService
+                .getAncestors(conversationId, leafMessageId, maxMessages)
+                .stream()
+                .map(this::toAiMessage)
+                .toList();
     }
 
     @Override
     public void clear(@NonNull String conversationId) {
-        chatMessageRepository.deleteAllByConversationId(conversationId);
+        chatMessageService.deleteByConversationId(conversationId);
     }
 
     private Message toAiMessage(ChatMessage message) {

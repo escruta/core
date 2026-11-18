@@ -87,24 +87,55 @@ class ConversationController {
             return ResponseEntity.notFound().build();
         }
 
-        List<ChatMessage> messages = chatMessageService.getConversationMessages(conversationId);
+        return ResponseEntity.ok(buildConversationMessagesResponse(conversation));
+    }
 
-        var messageResponses = messages.stream().map(m -> new ConversationMessagesResponse.MessageResponse(
-                m.getContent(),
-                m.getRole(),
-                chatMessageService.deserializeCitedSources(m),
-                chatMessageService.deserializeSelectedSourceIds(m).size(),
-                chatMessageService.deserializeThinkingSteps(m),
-                m.getThinkingDurationMs()
-        )).toList();
+    @PatchMapping("/{conversationId}/messages/{messageId}/select")
+    ResponseEntity<ConversationMessagesResponse> selectMessageVersion(
+            @PathVariable UUID notebookId,
+            @PathVariable String conversationId,
+            @PathVariable Long messageId
+    ) {
+        var conversation = conversationRepository.findByIdAndNotebookId(conversationId, notebookId).orElse(null);
 
-        return ResponseEntity.ok(new ConversationMessagesResponse(
+        if (conversation == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        var selected = chatMessageService.selectMessageVersion(conversationId, messageId);
+        if (selected.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        return ResponseEntity.ok(buildConversationMessagesResponse(conversation));
+    }
+
+    private ConversationMessagesResponse buildConversationMessagesResponse(Conversation conversation) {
+        String conversationId = conversation.getId();
+        List<ChatMessageService.ActiveMessageNode> activeBranch = chatMessageService.getActiveBranch(conversationId);
+
+        var messageResponses = activeBranch.stream().map(node -> {
+            ChatMessage m = node.message();
+            return new ConversationMessagesResponse.MessageResponse(
+                    m.getId(),
+                    m.getParentId(),
+                    node.siblingIds(),
+                    m.getContent(),
+                    m.getRole(),
+                    chatMessageService.deserializeCitedSources(m),
+                    chatMessageService.deserializeSelectedSourceIds(m).size(),
+                    chatMessageService.deserializeThinkingSteps(m),
+                    m.getThinkingDurationMs()
+            );
+        }).toList();
+
+        return new ConversationMessagesResponse(
                 conversationId,
                 conversation.getMode(),
                 conversation.getStatus(),
                 conversation.isHasUnseenReply(),
                 messageResponses
-        ));
+        );
     }
 
     @PatchMapping("/{conversationId}")

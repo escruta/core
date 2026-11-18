@@ -132,6 +132,8 @@ CREATE TABLE messages
 (
     id                   bigint       NOT NULL PRIMARY KEY AUTO_INCREMENT,
     conversation_id      varchar(255) NOT NULL,
+    parent_id            bigint       NULL,
+    is_active            boolean      NOT NULL DEFAULT true,
     role                 varchar(10)  NOT NULL,
     content              text         NOT NULL,
     selected_source_ids  text,
@@ -145,6 +147,9 @@ CREATE TABLE messages
 
 CREATE INDEX messages_conversation_id_idx
     ON messages (conversation_id, id);
+
+CREATE INDEX messages_conversation_parent_idx
+    ON messages (conversation_id, parent_id, id);
 
 CREATE TABLE source_jobs
 (

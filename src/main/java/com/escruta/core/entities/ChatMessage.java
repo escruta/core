@@ -23,6 +23,12 @@ public class ChatMessage {
     @JoinColumn(name = "conversation_id", nullable = false)
     private Conversation conversation;
 
+    @Column(name = "parent_id")
+    private Long parentId;
+
+    @Column(name = "is_active", nullable = false)
+    private boolean active = true;
+
     @Column(nullable = false)
     private String role;
 

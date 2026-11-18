@@ -2,6 +2,8 @@ package com.escruta.core.integration;
 
 import com.escruta.core.dtos.ChatRequest;
 import com.escruta.core.dtos.CompleteRegistrationRequest;
+import com.escruta.core.dtos.EditMessageRequest;
+import com.escruta.core.dtos.RegenerateMessageRequest;
 import com.escruta.core.dtos.RequestEmailCodeRequest;
 import com.escruta.core.dtos.VerifyEmailCodeRequest;
 import com.escruta.core.dtos.notebook.NotebookCreationDTO;
@@ -336,11 +338,210 @@ class UserJourneyIntegrationTest {
                         "Bearer " + authToken
                 ))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages[1].id").isNumber())
                 .andExpect(jsonPath("$.messages[1].content").value("Respuesta final"))
                 .andExpect(jsonPath("$.messages[1].thinkingSteps").isArray())
                 .andExpect(jsonPath("$.messages[1].thinkingSteps[0].type").value("thought"))
                 .andExpect(jsonPath("$.messages[1].thinkingSteps[0].detail").value("Analizando las fuentes..."))
                 .andExpect(jsonPath("$.messages[1].thinkingSteps[1].type").value("text"))
                 .andExpect(jsonPath("$.messages[1].thinkingSteps[1].detail").value("Respuesta final"));
+    }
+
+    @Test
+    @Order(14)
+    @DisplayName("14. Edit a sent user message and regenerate an assistant response")
+    void step14_editAndRegenerateMessages() throws Exception {
+        var options = ChatOptions.builder().build();
+        lenient().when(chatModel.getOptions()).thenReturn(options);
+        lenient()
+                .when(chatModel.stream(any(Prompt.class)))
+                .thenReturn(Flux.just(ChatResponse
+                        .builder()
+                        .generations(List.of(new Generation(new AssistantMessage("Primera respuesta"))))
+                        .build()));
+
+        MvcResult firstTurn = mockMvc
+                .perform(post("/notebooks/" + notebookId + "/chat/stream")
+                        .header("Authorization", "Bearer " + authToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ChatRequest(
+                                "Primera pregunta",
+                                null,
+                                null,
+                                null
+                        ))))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        mockMvc.perform(asyncDispatch(firstTurn)).andExpect(status().isOk());
+
+        String firstSse = firstTurn.getResponse().getContentAsString();
+        assertThat(firstSse).contains("userMessageId");
+        assertThat(firstSse).contains("assistantMessageId");
+
+        String convId = firstSse
+                .lines()
+                .filter(l -> l.contains("\"conversationId\""))
+                .findFirst()
+                .map(l -> l.replaceFirst(".*\"conversationId\"\\s*:\\s*\"([^\"]+)\".*", "$1"))
+                .orElseThrow();
+
+        lenient()
+                .when(chatModel.stream(any(Prompt.class)))
+                .thenReturn(Flux.just(ChatResponse
+                        .builder()
+                        .generations(List.of(new Generation(new AssistantMessage("Segunda respuesta"))))
+                        .build()));
+
+        MvcResult secondTurn = mockMvc
+                .perform(post("/notebooks/" + notebookId + "/chat/stream")
+                        .header("Authorization", "Bearer " + authToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ChatRequest(
+                                "Segunda pregunta",
+                                convId,
+                                null,
+                                null
+                        ))))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        mockMvc.perform(asyncDispatch(secondTurn)).andExpect(status().isOk());
+
+        MvcResult convRes = mockMvc
+                .perform(get("/notebooks/" + notebookId + "/conversations/" + convId).header(
+                        "Authorization",
+                        "Bearer " + authToken
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages.length()").value(4))
+                .andReturn();
+
+        JsonNode convJson = objectMapper.readTree(convRes.getResponse().getContentAsString());
+        long firstUserMsgId = convJson.get("messages").get(0).get("id").asLong();
+        long secondAssistantMsgId = convJson.get("messages").get(3).get("id").asLong();
+
+        lenient()
+                .when(chatModel.stream(any(Prompt.class)))
+                .thenReturn(Flux.just(ChatResponse
+                        .builder()
+                        .generations(List.of(new Generation(new AssistantMessage("Segunda respuesta regenerada"))))
+                        .build()));
+
+        MvcResult regenResult = mockMvc
+                .perform(post("/notebooks/" + notebookId + "/conversations/" + convId + "/messages/" + secondAssistantMsgId + "/regenerate/stream")
+                        .header("Authorization", "Bearer " + authToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new RegenerateMessageRequest(null, null, null, null))))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        mockMvc.perform(asyncDispatch(regenResult)).andExpect(status().isOk());
+        assertThat(regenResult.getResponse().getContentAsString()).contains("Segunda respuesta regenerada");
+
+        MvcResult afterRegenRes = mockMvc
+                .perform(get("/notebooks/" + notebookId + "/conversations/" + convId).header(
+                        "Authorization",
+                        "Bearer " + authToken
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages.length()").value(4))
+                .andExpect(jsonPath("$.messages[0].content").value("Primera pregunta"))
+                .andExpect(jsonPath("$.messages[1].content").value("Primera respuesta"))
+                .andExpect(jsonPath("$.messages[2].content").value("Segunda pregunta"))
+                .andExpect(jsonPath("$.messages[3].content").value("Segunda respuesta regenerada"))
+                .andExpect(jsonPath("$.messages[3].siblingIds.length()").value(2))
+                .andReturn();
+
+        long regeneratedAssistantMsgId = objectMapper
+                .readTree(afterRegenRes.getResponse().getContentAsString())
+                .get("messages")
+                .get(3)
+                .get("id")
+                .asLong();
+
+        mockMvc
+                .perform(patch("/notebooks/" + notebookId + "/conversations/" + convId + "/messages/" + secondAssistantMsgId + "/select").header(
+                        "Authorization",
+                        "Bearer " + authToken
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages[3].content").value("Segunda respuesta"))
+                .andExpect(jsonPath("$.messages[3].siblingIds.length()").value(2));
+
+        mockMvc
+                .perform(patch("/notebooks/" + notebookId + "/conversations/" + convId + "/messages/" + regeneratedAssistantMsgId + "/select").header(
+                        "Authorization",
+                        "Bearer " + authToken
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages[3].content").value("Segunda respuesta regenerada"));
+
+        lenient()
+                .when(chatModel.stream(any(Prompt.class)))
+                .thenReturn(Flux.just(ChatResponse
+                        .builder()
+                        .generations(List.of(new Generation(new AssistantMessage("Respuesta tras editar"))))
+                        .build()));
+
+        MvcResult editResult = mockMvc
+                .perform(put("/notebooks/" + notebookId + "/conversations/" + convId + "/messages/" + firstUserMsgId + "/stream")
+                        .header("Authorization", "Bearer " + authToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new EditMessageRequest(
+                                "Primera pregunta editada",
+                                null,
+                                null,
+                                null,
+                                null
+                        ))))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        mockMvc.perform(asyncDispatch(editResult)).andExpect(status().isOk());
+        assertThat(editResult.getResponse().getContentAsString()).contains("Respuesta tras editar");
+
+        MvcResult afterEditRes = mockMvc
+                .perform(get("/notebooks/" + notebookId + "/conversations/" + convId).header(
+                        "Authorization",
+                        "Bearer " + authToken
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages.length()").value(2))
+                .andExpect(jsonPath("$.messages[0].content").value("Primera pregunta editada"))
+                .andExpect(jsonPath("$.messages[0].siblingIds.length()").value(2))
+                .andExpect(jsonPath("$.messages[1].content").value("Respuesta tras editar"))
+                .andExpect(jsonPath("$.messages[1].siblingIds.length()").value(1))
+                .andReturn();
+
+        mockMvc
+                .perform(patch("/notebooks/" + notebookId + "/conversations/" + convId + "/messages/" + firstUserMsgId + "/select").header(
+                        "Authorization",
+                        "Bearer " + authToken
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages.length()").value(4))
+                .andExpect(jsonPath("$.messages[0].content").value("Primera pregunta"))
+                .andExpect(jsonPath("$.messages[0].siblingIds.length()").value(2))
+                .andExpect(jsonPath("$.messages[3].content").value("Segunda respuesta regenerada"));
+
+        JsonNode afterEditJson = objectMapper.readTree(afterEditRes.getResponse().getContentAsString());
+        long assistantIdAfterEdit = afterEditJson.get("messages").get(1).get("id").asLong();
+
+        mockMvc
+                .perform(put("/notebooks/" + notebookId + "/conversations/" + convId + "/messages/" + assistantIdAfterEdit + "/stream")
+                        .header("Authorization", "Bearer " + authToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new EditMessageRequest(
+                                "Intento inválido",
+                                null,
+                                null,
+                                null,
+                                null
+                        ))))
+                .andExpect(status().isBadRequest());
+
+        mockMvc
+                .perform(post("/notebooks/" + notebookId + "/conversations/" + convId + "/messages/999999/regenerate/stream")
+                        .header("Authorization", "Bearer " + authToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isNotFound());
     }
 }

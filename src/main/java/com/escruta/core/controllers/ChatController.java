@@ -3,11 +3,15 @@ package com.escruta.core.controllers;
 import com.escruta.core.dtos.AgentStep;
 import com.escruta.core.dtos.ChatReplyMessage;
 import com.escruta.core.dtos.ChatRequest;
+import com.escruta.core.dtos.EditMessageRequest;
 import com.escruta.core.dtos.ExampleQuestions;
 import com.escruta.core.dtos.NotebookSummaryDTO;
+import com.escruta.core.dtos.RegenerateMessageRequest;
 import com.escruta.core.dtos.source.SourceResponseDTO;
 import com.escruta.core.dtos.tools.JobStartedResponse;
+import com.escruta.core.entities.ChatMessage;
 import com.escruta.core.entities.Conversation;
+import com.escruta.core.entities.Notebook;
 import com.escruta.core.entities.enums.ChatMode;
 import com.escruta.core.entities.enums.ConversationStatus;
 import com.escruta.core.entities.enums.SourceStatus;
@@ -17,6 +21,7 @@ import com.escruta.core.repositories.SourceChunkRepository;
 import com.escruta.core.repositories.SourceGroupRepository;
 import com.escruta.core.repositories.SourceRepository;
 import com.escruta.core.services.AgentTraceRecorder;
+import com.escruta.core.services.BranchingChatMemoryAdvisor;
 import com.escruta.core.services.ChatMessageService;
 import com.escruta.core.services.ExampleQuestionService;
 import com.escruta.core.services.JpaChatMemory;
@@ -34,7 +39,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.document.Document;
@@ -45,6 +49,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -169,7 +174,7 @@ public class ChatController {
 
     @PostConstruct
     void init() {
-        var memoryAdvisor = MessageChatMemoryAdvisor.builder(chatMemory).build();
+        var memoryAdvisor = new BranchingChatMemoryAdvisor(chatMemory);
         this.normalChatClient = ChatClient
                 .builder(chatModel)
                 .defaultSystem(UNIFIED_SYSTEM_MESSAGE)
@@ -197,9 +202,12 @@ public class ChatController {
     private ChatClient.ChatClientRequestSpec buildChatPrompt(
             ChatMode mode,
             String conversationId,
+            @Nullable Long historyParentId,
             NotebookAgentTools agentTools,
             List<SourceResponseDTO> scopedSources,
-            ChatRequest request
+            String userInput,
+            @Nullable String responseDetail,
+            @Nullable String customInstructions
     ) {
         String baseSystem = mode == ChatMode.LEARNING ?
                 LEARNING_SYSTEM_MESSAGE :
@@ -231,17 +239,18 @@ public class ChatController {
             }
         }
 
-        String preferenceSuffix = buildPreferenceSuffix(request);
+        String preferenceSuffix = buildPreferenceSuffix(responseDetail, customInstructions);
         if (!preferenceSuffix.isEmpty()) {
             systemBuilder.append("\nUSER PREFERENCES:\n").append(preferenceSuffix);
         }
 
-        return clientFor(mode)
-                .prompt()
-                .system(systemBuilder.toString())
-                .tools(agentTools)
-                .advisors(advisorSpec -> advisorSpec.param(ChatMemory.CONVERSATION_ID, conversationId))
-                .user(request.userInput());
+        return clientFor(mode).prompt().system(systemBuilder.toString()).tools(agentTools).advisors(advisorSpec -> {
+            advisorSpec.param(ChatMemory.CONVERSATION_ID, conversationId);
+            advisorSpec.param(BranchingChatMemoryAdvisor.USE_EXPLICIT_PARENT, Boolean.TRUE);
+            if (historyParentId != null) {
+                advisorSpec.param(BranchingChatMemoryAdvisor.PARENT_MESSAGE_ID, historyParentId);
+            }
+        }).user(userInput);
     }
 
     private List<SourceResponseDTO> resolveScopedSources(UUID notebookId, @Nullable List<UUID> selectedSourceIds) {
@@ -259,11 +268,11 @@ public class ChatController {
                 .toList();
     }
 
-    private static String buildPreferenceSuffix(ChatRequest request) {
+    private static String buildPreferenceSuffix(@Nullable String responseDetail, @Nullable String customInstructions) {
         List<String> directives = new ArrayList<>();
 
-        if (request.responseDetail() != null && !request.responseDetail().isBlank()) {
-            switch (request.responseDetail().trim().toLowerCase(Locale.ROOT)) {
+        if (responseDetail != null && !responseDetail.isBlank()) {
+            switch (responseDetail.trim().toLowerCase(Locale.ROOT)) {
                 case "concise" -> directives.add("- Keep your response concise and focused on the essential points.");
                 case "detailed" -> directives.add(
                         "- Provide a thorough, detailed explanation with supporting context from the sources.");
@@ -272,10 +281,8 @@ public class ChatController {
             }
         }
 
-        if (request.customInstructions() != null && !request.customInstructions().isBlank()) {
-            directives.add("- Additional instructions (do not override grounding or citation rules): " + request
-                    .customInstructions()
-                    .trim());
+        if (customInstructions != null && !customInstructions.isBlank()) {
+            directives.add("- Additional instructions (do not override grounding or citation rules): " + customInstructions.trim());
         }
 
         return String.join("\n", directives);
@@ -389,9 +396,20 @@ public class ChatController {
                 traceRecorder
         );
 
-        var chatResponse = buildChatPrompt(mode, conversationId, agentTools, scopedSources, request)
-                .call()
-                .chatResponse();
+        Long parentId = request.conversationId() != null ?
+                chatMessageService.getActiveLeafId(conversationId) :
+                null;
+
+        var chatResponse = buildChatPrompt(
+                mode,
+                conversationId,
+                parentId,
+                agentTools,
+                scopedSources,
+                request.userInput(),
+                request.responseDetail(),
+                request.customInstructions()
+        ).call().chatResponse();
 
         if (chatResponse == null || chatResponse.getResult() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The AI provider returned an empty response");
@@ -425,6 +443,7 @@ public class ChatController {
 
         chatMessageService.saveConversationTurn(
                 conversation,
+                parentId,
                 request.userInput(),
                 request.selectedSourceIds(),
                 assistantContent,
@@ -465,6 +484,181 @@ public class ChatController {
         }
         boolean isNewConversation = existingConversation == null;
 
+        Conversation conversation = isNewConversation ?
+                new Conversation() :
+                existingConversation;
+        if (isNewConversation) {
+            conversation.setId(conversationId);
+            conversation.setTitle(normalizeTitle(null, request.userInput()));
+        }
+
+        Long parentId = isNewConversation ?
+                null :
+                chatMessageService.getActiveLeafId(conversationId);
+
+        return executeStreamChat(
+                notebook,
+                ownerId,
+                conversation,
+                isNewConversation,
+                parentId,
+                null,
+                request.userInput(),
+                request.selectedSourceIds(),
+                mode,
+                request.responseDetail(),
+                request.customInstructions()
+        );
+    }
+
+    private record MessageStreamContext(
+            Notebook notebook,
+            @Nullable
+            UUID ownerId,
+            Conversation conversation,
+            ChatMessage targetMessage
+    ) {
+    }
+
+    private MessageStreamContext loadMessageStreamContext(UUID notebookId, String conversationId, Long messageId) {
+        rateLimitService.checkChatRequest(userService.getUserId());
+
+        Notebook notebook = notebookRepository
+                .findById(notebookId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notebook not found"));
+        UUID ownerId = notebookRepository.findOwnerId(notebookId);
+
+        Conversation conversation = conversationRepository
+                .findByIdAndNotebookId(conversationId, notebookId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Conversation not found"));
+
+        ChatMessage targetMessage = chatMessageService
+                .getMessage(conversationId, messageId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Message not found"));
+
+        return new MessageStreamContext(notebook, ownerId, conversation, targetMessage);
+    }
+
+    private List<UUID> resolveMessageSelectedSourceIds(
+            @Nullable List<UUID> requestedSourceIds,
+            ChatMessage fallbackMessage
+    ) {
+        return requestedSourceIds != null && !requestedSourceIds.isEmpty() ?
+                requestedSourceIds :
+                chatMessageService.deserializeSelectedSourceUuids(fallbackMessage);
+    }
+
+    private static ChatMode resolveConversationMode(@Nullable ChatMode requestedMode, Conversation conversation) {
+        return requestedMode != null ?
+                requestedMode :
+                resolveMode(conversation.getMode());
+    }
+
+    @PutMapping(value = "conversations/{conversationId}/messages/{messageId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter editMessageStream(
+            @PathVariable UUID notebookId,
+            @PathVariable String conversationId,
+            @PathVariable Long messageId,
+            @Valid @RequestBody EditMessageRequest request
+    ) {
+        MessageStreamContext ctx = loadMessageStreamContext(notebookId, conversationId, messageId);
+        if (!"USER".equals(ctx.targetMessage().getRole())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only user messages can be edited");
+        }
+
+        List<UUID> effectiveSelectedSourceIds = resolveMessageSelectedSourceIds(
+                request.selectedSourceIds(),
+                ctx.targetMessage()
+        );
+        ChatMode mode = resolveConversationMode(request.mode(), ctx.conversation());
+
+        return executeStreamChat(
+                ctx.notebook(),
+                ctx.ownerId(),
+                ctx.conversation(),
+                false,
+                ctx.targetMessage().getParentId(),
+                null,
+                request.userInput().trim(),
+                effectiveSelectedSourceIds,
+                mode,
+                request.responseDetail(),
+                request.customInstructions()
+        );
+    }
+
+    @PostMapping(value = "conversations/{conversationId}/messages/{messageId}/regenerate/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter regenerateMessageStream(
+            @PathVariable UUID notebookId,
+            @PathVariable String conversationId,
+            @PathVariable Long messageId,
+            @Valid @RequestBody(required = false) RegenerateMessageRequest request
+    ) {
+        MessageStreamContext ctx = loadMessageStreamContext(notebookId, conversationId, messageId);
+        ChatMessage targetMessage = ctx.targetMessage();
+
+        ChatMessage userMessage;
+        if ("USER".equals(targetMessage.getRole())) {
+            userMessage = targetMessage;
+        } else if ("ASSISTANT".equals(targetMessage.getRole())) {
+            userMessage = chatMessageService
+                    .getParentUserMessage(conversationId, targetMessage)
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "No preceding user message found to regenerate"
+                    ));
+        } else {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported message role");
+        }
+
+        List<UUID> effectiveSelectedSourceIds = resolveMessageSelectedSourceIds(
+                request != null ?
+                        request.selectedSourceIds() :
+                        null, userMessage
+        );
+        ChatMode mode = resolveConversationMode(
+                request != null ?
+                        request.mode() :
+                        null, ctx.conversation()
+        );
+        String responseDetail = request != null ?
+                request.responseDetail() :
+                null;
+        String customInstructions = request != null ?
+                request.customInstructions() :
+                null;
+
+        return executeStreamChat(
+                ctx.notebook(),
+                ctx.ownerId(),
+                ctx.conversation(),
+                false,
+                userMessage.getParentId(),
+                userMessage.getId(),
+                userMessage.getContent(),
+                effectiveSelectedSourceIds,
+                mode,
+                responseDetail,
+                customInstructions
+        );
+    }
+
+    private SseEmitter executeStreamChat(
+            Notebook notebook,
+            @Nullable UUID ownerId,
+            Conversation conversation,
+            boolean isNewConversation,
+            @Nullable Long parentId,
+            @Nullable Long existingUserMessageId,
+            String userInput,
+            @Nullable List<UUID> selectedSourceIds,
+            ChatMode mode,
+            @Nullable String responseDetail,
+            @Nullable String customInstructions
+    ) {
+        UUID notebookId = notebook.getId();
+        String conversationId = conversation.getId();
+
         StreamSink sink = new StreamSink(new SseEmitter(300_000L));
         AtomicBoolean terminal = new AtomicBoolean(false);
         AtomicReference<Disposable> subscriptionRef = new AtomicReference<>();
@@ -483,13 +677,6 @@ public class ChatController {
             disposeQuietly(subscriptionRef.get());
         });
 
-        Conversation conversation = isNewConversation ?
-                new Conversation() :
-                existingConversation;
-        if (isNewConversation) {
-            conversation.setId(conversationId);
-            conversation.setTitle(normalizeTitle(null, request.userInput()));
-        }
         conversation.setNotebook(notebook);
         conversation.setMode(mode);
         conversation.setStatus(ConversationStatus.GENERATING);
@@ -509,11 +696,11 @@ public class ChatController {
                         .data(Map.of("stepId", stepId, "delta", delta)))
         );
 
-        List<SourceResponseDTO> scopedSources = resolveScopedSources(notebookId, request.selectedSourceIds());
+        List<SourceResponseDTO> scopedSources = resolveScopedSources(notebookId, selectedSourceIds);
 
         NotebookAgentTools agentTools = new NotebookAgentTools(
                 notebookId,
-                request.selectedSourceIds(),
+                selectedSourceIds,
                 retrievalService,
                 sourceRepository,
                 sourceChunkRepository,
@@ -539,9 +726,16 @@ public class ChatController {
         );
 
         final Conversation currentConversation = conversation;
-        var streamResponse = buildChatPrompt(mode, conversationId, agentTools, scopedSources, request)
-                .stream()
-                .chatResponse();
+        var streamResponse = buildChatPrompt(
+                mode,
+                conversationId,
+                parentId,
+                agentTools,
+                scopedSources,
+                userInput,
+                responseDetail,
+                customInstructions
+        ).stream().chatResponse();
 
         Disposable subscription = streamResponse.doOnNext(chatResponse -> {
             if (chatResponse.getResult() == null) {
@@ -563,9 +757,11 @@ public class ChatController {
                         ownerId,
                         notebookId,
                         conversationId,
-                        request.userInput(),
-                        request.selectedSourceIds(),
-                        true,
+                        parentId,
+                        existingUserMessageId,
+                        userInput,
+                        selectedSourceIds,
+                        existingUserMessageId == null,
                         error
                 );
             }
@@ -577,8 +773,10 @@ public class ChatController {
                     sink,
                     ownerId,
                     notebookId,
-                    request.userInput(),
-                    request.selectedSourceIds(),
+                    parentId,
+                    existingUserMessageId,
+                    userInput,
+                    selectedSourceIds,
                     conversationId,
                     isNewConversation,
                     agentTools.getCollectedDocuments(),
@@ -599,8 +797,10 @@ public class ChatController {
                             notebookId,
                             conversationId,
                             currentConversation,
-                            request.userInput(),
-                            request.selectedSourceIds(),
+                            parentId,
+                            existingUserMessageId,
+                            userInput,
+                            selectedSourceIds,
                             agentTools.getCollectedDocuments(),
                             accumulatedText.toString(),
                             traceRecorder.getStepsSnapshot(),
@@ -629,6 +829,8 @@ public class ChatController {
             StreamSink sink,
             @Nullable UUID ownerId,
             UUID notebookId,
+            @Nullable Long parentId,
+            @Nullable Long existingUserMessageId,
             String userInput,
             List<UUID> selectedSourceIds,
             String conversationId,
@@ -660,24 +862,37 @@ public class ChatController {
             notebookRepository.touchLastActivity(notebookId);
 
             List<ChatReplyMessage.CitedSource> citedSources = toCitedSources(retrievedDocuments);
-            chatMessageService.saveConversationTurn(
-                    conversation,
-                    userInput,
-                    selectedSourceIds,
-                    assistantContent,
-                    citedSources,
-                    thinkingSteps,
-                    thinkingDurationMs
-            );
+            ChatMessageService.SavedTurn savedTurn = existingUserMessageId != null ?
+                    chatMessageService.saveRegeneratedAssistant(
+                            conversation,
+                            existingUserMessageId,
+                            assistantContent,
+                            citedSources,
+                            thinkingSteps,
+                            thinkingDurationMs
+                    ) :
+                    chatMessageService.saveConversationTurn(
+                            conversation,
+                            parentId,
+                            userInput,
+                            selectedSourceIds,
+                            assistantContent,
+                            citedSources,
+                            thinkingSteps,
+                            thinkingDurationMs
+                    );
 
             sink.send(SseEmitter.event().name("sources").data(citedSources));
             if (isNewConversation) {
                 sink.send(SseEmitter.event().name("title").data(conversation.getTitle()));
             }
-            boolean sentDone = sink.send(SseEmitter
-                    .event()
-                    .name("done")
-                    .data(Map.of("durationMs", thinkingDurationMs)));
+            Map<String, Object> donePayload = new LinkedHashMap<>();
+            donePayload.put("durationMs", thinkingDurationMs);
+            donePayload.put("userMessageId", savedTurn.userMessageId());
+            donePayload.put("assistantMessageId", savedTurn.assistantMessageId());
+            donePayload.put("userSiblingIds", savedTurn.userSiblingIds());
+            donePayload.put("assistantSiblingIds", savedTurn.assistantSiblingIds());
+            boolean sentDone = sink.send(SseEmitter.event().name("done").data(donePayload));
             if (!sentDone && !conversation.isHasUnseenReply()) {
                 conversation.setHasUnseenReply(true);
                 conversation = conversationRepository.save(conversation);
@@ -687,7 +902,18 @@ public class ChatController {
             publishConversationUpdated(ownerId, notebookId, conversation);
         } catch (Exception e) {
             log.error("Error finalizing chat stream for conversation {}", conversationId, e);
-            handleStreamError(sink, ownerId, notebookId, conversationId, userInput, selectedSourceIds, false, e);
+            handleStreamError(
+                    sink,
+                    ownerId,
+                    notebookId,
+                    conversationId,
+                    parentId,
+                    existingUserMessageId,
+                    userInput,
+                    selectedSourceIds,
+                    false,
+                    e
+            );
         }
     }
 
@@ -696,6 +922,8 @@ public class ChatController {
             @Nullable UUID ownerId,
             UUID notebookId,
             String conversationId,
+            @Nullable Long parentId,
+            @Nullable Long existingUserMessageId,
             String userInput,
             List<UUID> selectedSourceIds,
             boolean persistUserMessage,
@@ -706,8 +934,20 @@ public class ChatController {
                     .findByIdAndNotebookId(conversationId, notebookId)
                     .orElse(null);
             if (conversation != null) {
-                if (persistUserMessage) {
-                    chatMessageService.saveUserMessage(conversation, userInput, selectedSourceIds);
+                if (persistUserMessage && existingUserMessageId == null) {
+                    ChatMessage savedUser = chatMessageService.saveUserMessage(
+                            conversation,
+                            parentId,
+                            userInput,
+                            selectedSourceIds
+                    );
+                    if (savedUser.getId() != null) {
+                        List<Long> siblingIds = chatMessageService.getSiblingIds(conversationId, parentId);
+                        sink.send(SseEmitter
+                                .event()
+                                .name("userMessage")
+                                .data(Map.of("id", savedUser.getId(), "siblingIds", siblingIds)));
+                    }
                 }
                 conversation.setStatus(ConversationStatus.FAILED);
                 conversation.setHasUnseenReply(false);
@@ -728,6 +968,8 @@ public class ChatController {
             UUID notebookId,
             String conversationId,
             Conversation currentConversation,
+            @Nullable Long parentId,
+            @Nullable Long existingUserMessageId,
             String userInput,
             List<UUID> selectedSourceIds,
             List<Document> retrievedDocuments,
@@ -750,9 +992,22 @@ public class ChatController {
             conversation = conversationRepository.save(conversation);
             notebookRepository.touchLastActivity(notebookId);
 
-            if (assistantContent != null && !assistantContent.isBlank()) {
+            boolean hasAssistantContent = assistantContent != null && !assistantContent.isBlank();
+            if (existingUserMessageId != null) {
+                if (hasAssistantContent) {
+                    chatMessageService.saveRegeneratedAssistant(
+                            conversation,
+                            existingUserMessageId,
+                            assistantContent,
+                            toCitedSources(retrievedDocuments),
+                            thinkingSteps,
+                            thinkingDurationMs
+                    );
+                }
+            } else if (hasAssistantContent) {
                 chatMessageService.saveConversationTurn(
                         conversation,
+                        parentId,
                         userInput,
                         selectedSourceIds,
                         assistantContent,
@@ -761,7 +1016,7 @@ public class ChatController {
                         thinkingDurationMs
                 );
             } else {
-                chatMessageService.saveUserMessage(conversation, userInput, selectedSourceIds);
+                chatMessageService.saveUserMessage(conversation, parentId, userInput, selectedSourceIds);
             }
 
             sink.markInactive();

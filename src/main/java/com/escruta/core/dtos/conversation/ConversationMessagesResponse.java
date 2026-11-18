@@ -15,6 +15,9 @@ public record ConversationMessagesResponse(
         List<MessageResponse> messages
 ) {
     public record MessageResponse(
+            Long id,
+            Long parentId,
+            List<Long> siblingIds,
             String content,
             String type,
             List<ChatReplyMessage.CitedSource> citedSources,
