@@ -50,6 +50,27 @@ CREATE TABLE notebooks
     CONSTRAINT fk_notebooks_folders FOREIGN KEY (folder_id) REFERENCES folders (id) ON DELETE SET NULL
 );
 
+CREATE TABLE notebook_learning_memories
+(
+    notebook_id             binary(16)  NOT NULL PRIMARY KEY,
+    enabled                 boolean     NOT NULL DEFAULT true,
+    proficiency_level       varchar(32) NOT NULL DEFAULT 'AUTO',
+    learning_goal           text        NULL,
+    mastered_concepts       text        NULL,
+    struggling_concepts     text        NULL,
+    study_notes             text        NULL,
+    flashcards_reviewed     int         NOT NULL DEFAULT 0,
+    flashcards_known        int         NOT NULL DEFAULT 0,
+    quiz_questions_answered int         NOT NULL DEFAULT 0,
+    quiz_questions_correct  int         NOT NULL DEFAULT 0,
+    learning_turns_count    int         NOT NULL DEFAULT 0,
+    version                 bigint      NOT NULL DEFAULT 0,
+    created_at              datetime(6),
+    updated_at              datetime(6),
+    CONSTRAINT notebook_learning_memories_level_check CHECK (proficiency_level IN ('AUTO', 'BEGINNER', 'INTERMEDIATE', 'ADVANCED')),
+    CONSTRAINT fk_learning_memories_notebooks FOREIGN KEY (notebook_id) REFERENCES notebooks (id) ON DELETE CASCADE
+);
+
 CREATE TABLE generation_jobs
 (
     completed_at     timestamp(6) NULL,

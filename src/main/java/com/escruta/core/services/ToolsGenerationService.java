@@ -67,6 +67,7 @@ public class ToolsGenerationService {
     private final SourceChunkRepository chunkRepository;
     private final RetrievalService retrievalService;
     private final NotebookContextService notebookContextService;
+    private final LearningMemoryService learningMemoryService;
     private final SseNotificationService sseNotificationService;
     private final ChatModel chatModel;
     private final ObjectMapper objectMapper;
@@ -430,11 +431,13 @@ public class ToolsGenerationService {
             throw new IllegalStateException("No sources available or content not yet indexed");
         }
 
+        String learnerContext = learningMemoryService.buildToolGenerationContext(notebookId);
+
         return switch (job.getType()) {
-            case STUDY_GUIDE -> generateStudyGuide(context, options);
-            case FLASHCARDS -> generateFlashcards(context, options);
-            case QUESTIONNAIRE -> generateQuestionnaire(context, options);
-            case MIND_MAP -> generateMindMap(context, options);
+            case STUDY_GUIDE -> generateStudyGuide(context, options, learnerContext);
+            case FLASHCARDS -> generateFlashcards(context, options, learnerContext);
+            case QUESTIONNAIRE -> generateQuestionnaire(context, options, learnerContext);
+            case MIND_MAP -> generateMindMap(context, options, learnerContext);
         };
     }
 
@@ -515,7 +518,7 @@ public class ToolsGenerationService {
                 context;
     }
 
-    private GeneratedArtifact generateStudyGuide(String context, GenerationOptions options) {
+    private GeneratedArtifact generateStudyGuide(String context, GenerationOptions options, String learnerContext) {
         Difficulty difficulty = options.difficulty() != null ?
                 options.difficulty() :
                 Difficulty.MEDIUM;
@@ -545,7 +548,7 @@ public class ToolsGenerationService {
         };
 
         String sectionsDirective = buildStudyGuideSectionsDirective(activeSections);
-        String focusDirective = buildFocusDirective(options.focusTopic());
+        String focusDirective = buildCustomizationTail(options.focusTopic(), learnerContext);
 
         String systemPrompt = """
                 You are an expert educator creating a structured study guide strictly grounded in the provided materials.
@@ -620,7 +623,7 @@ public class ToolsGenerationService {
         return sb.toString();
     }
 
-    private GeneratedArtifact generateFlashcards(String context, GenerationOptions options) {
+    private GeneratedArtifact generateFlashcards(String context, GenerationOptions options, String learnerContext) {
         int cardCount = options.itemCount() != null ?
                 Math.clamp(options.itemCount(), 5, 30) :
                 15;
@@ -647,7 +650,7 @@ public class ToolsGenerationService {
                     "Answer style: DETAILED — Provide a thorough answer (2-4 sentences) including context or a concrete example.";
         };
 
-        String focusDirective = buildFocusDirective(options.focusTopic());
+        String focusDirective = buildCustomizationTail(options.focusTopic(), learnerContext);
 
         String systemPrompt = """
                 You are an expert educator designing flashcards strictly grounded in the provided materials.
@@ -685,7 +688,7 @@ public class ToolsGenerationService {
         return new GeneratedArtifact(objectMapper.writeValueAsString(sanitized), sanitized.title());
     }
 
-    private GeneratedArtifact generateQuestionnaire(String context, GenerationOptions options) {
+    private GeneratedArtifact generateQuestionnaire(String context, GenerationOptions options, String learnerContext) {
         int questionCount = options.itemCount() != null ?
                 Math.clamp(options.itemCount(), 3, 25) :
                 10;
@@ -716,7 +719,7 @@ public class ToolsGenerationService {
         };
 
         String allowedTypesJoined = String.join(", ", allowedTypes);
-        String focusDirective = buildFocusDirective(options.focusTopic());
+        String focusDirective = buildCustomizationTail(options.focusTopic(), learnerContext);
 
         String systemPrompt = """
                 You are an expert educator creating an interactive questionnaire strictly grounded in the provided materials.
@@ -778,7 +781,7 @@ public class ToolsGenerationService {
         return new GeneratedArtifact(objectMapper.writeValueAsString(sanitized), sanitized.title());
     }
 
-    private GeneratedArtifact generateMindMap(String context, GenerationOptions options) {
+    private GeneratedArtifact generateMindMap(String context, GenerationOptions options, String learnerContext) {
         Difficulty difficulty = options.difficulty() != null ?
                 options.difficulty() :
                 Difficulty.MEDIUM;
@@ -810,7 +813,7 @@ public class ToolsGenerationService {
                     "Node style: EXPANDED — Use descriptive labels (2-6 words), write an informative 2-sentence description per node with key context, and include 3-5 sub-branches per node.";
         };
 
-        String focusDirective = buildFocusDirective(options.focusTopic());
+        String focusDirective = buildCustomizationTail(options.focusTopic(), learnerContext);
 
         String systemPrompt = """
                 You are an expert at synthesizing knowledge into hierarchical mind maps strictly grounded in the provided materials.
@@ -877,6 +880,20 @@ public class ToolsGenerationService {
                 .map(child -> trimBranchDepth(child, currentDepth + 1, maxDepth))
                 .toList();
         return new MindMapResponse.Branch(branch.label(), branch.description(), trimmedChildren);
+    }
+
+    private static String buildCustomizationTail(@Nullable String focusTopic, @Nullable String learnerContext) {
+        String focus = buildFocusDirective(focusTopic);
+        String learner = learnerContext != null ?
+                learnerContext.trim() :
+                "";
+        if (focus.isEmpty()) {
+            return learner;
+        }
+        if (learner.isEmpty()) {
+            return focus;
+        }
+        return focus + "\n" + learner;
     }
 
     private static String buildFocusDirective(@Nullable String focusTopic) {

@@ -25,6 +25,9 @@ import com.escruta.core.services.BranchingChatMemoryAdvisor;
 import com.escruta.core.services.ChatMessageService;
 import com.escruta.core.services.ExampleQuestionService;
 import com.escruta.core.services.JpaChatMemory;
+import com.escruta.core.services.LearningMemoryAgentTools;
+import com.escruta.core.services.LearningMemoryReadTools;
+import com.escruta.core.services.LearningMemoryService;
 import com.escruta.core.services.NotebookAgentTools;
 import com.escruta.core.services.NotebookContextService;
 import com.escruta.core.services.RateLimitService;
@@ -94,10 +97,11 @@ public class ChatController {
               * `listSources`: list available sources and source groups in scope (especially useful when there are many sources or groups).
               * `getNotebookOverview`: inspect the notebook-level summary and main topics.
               * `calculate`: deterministic evaluator for arithmetic, percentages, averages, powers, logs, trigonometry, etc. Always use it instead of mental arithmetic.
+              * `getLearningMemory` (when available): inspect the user's learning memory for this notebook (proficiency level, learning goal, mastered concepts, concepts needing review, and tutoring notes). Use it when the user asks what they should review or wants explanations tailored to what they already know. NEVER treat learning memory as a factual source or cite it.
             - Before answering any question about the sources, ALWAYS use your tools to search or read the relevant sources.
             - Break complex or multi-part questions into focused searches. If a passage seems cut off or incomplete, use `getSurroundingChunks` or `readSourceChunks` to read adjacent sections.
             - Note the distinction in tool outputs: `Source ID: <uuid>` is the passage UUID used in `[source_<uuid>]` citations and `getSurroundingChunks`; `Document ID: <uuid>` is the parent source UUID used in `getSourceOverview`, `readSourceChunks`, and `searchExactMatch`.
-            - Never mention internal tool names (such as `searchSources`, `searchExactMatch`, `getSourceOverview`, `readSourceChunks`, `getSurroundingChunks`, `listSources`, `getNotebookOverview`, or `calculate`) in your final answer.
+            - Never mention internal tool names (such as `searchSources`, `searchExactMatch`, `getSourceOverview`, `readSourceChunks`, `getSurroundingChunks`, `listSources`, `getNotebookOverview`, `calculate`, or `getLearningMemory`) in your final answer.
             - Keep your internal reasoning concise and focused on concepts; avoid echoing raw UUIDs or `[source_...]` tags inside your thoughts, and reserve `[source_<id>]` citations for your final response.
             - If the answer cannot be found in the sources after searching, inform the user clearly.
             
@@ -126,10 +130,12 @@ public class ChatController {
               * `listSources`: list available sources and source groups in scope (especially useful when there are many sources or groups).
               * `getNotebookOverview`: inspect the notebook-level summary and main topics.
               * `calculate`: deterministic evaluator for arithmetic, percentages, averages, powers, logs, trigonometry, etc. Always use it to verify numeric examples or calculations instead of mental math.
+              * `getLearningMemory` (when available): inspect the student's learning memory for this notebook (level, goal, mastered concepts, concepts needing review, tutoring notes, practice stats). Call it when introducing a topic, tailoring depth/analogies, or checking what the student already knows. NEVER cite learning memory or treat it as a factual source.
+              * `updateLearningProgress` (when available): record clear evidence of concepts the student has mastered, concepts they struggled with, or a brief pedagogical observation in this notebook's learning memory. Use it sparingly and only when the student's response gives clear evidence.
             - Before answering any question about the sources, ALWAYS use your tools to search or read the relevant sources.
             - Break complex questions into focused searches and gather accurate evidence before teaching. If a passage seems cut off, use `getSurroundingChunks` or `readSourceChunks` to read the surrounding context.
             - Note the distinction in tool outputs: `Source ID: <uuid>` is the passage UUID used in `[source_<uuid>]` citations and `getSurroundingChunks`; `Document ID: <uuid>` is the parent source UUID used in `getSourceOverview`, `readSourceChunks`, and `searchExactMatch`.
-            - Never mention internal tool names (such as `searchSources`, `searchExactMatch`, `getSourceOverview`, `readSourceChunks`, `getSurroundingChunks`, `listSources`, `getNotebookOverview`, or `calculate`) in your final answer.
+            - Never mention internal tool names (such as `searchSources`, `searchExactMatch`, `getSourceOverview`, `readSourceChunks`, `getSurroundingChunks`, `listSources`, `getNotebookOverview`, `calculate`, `getLearningMemory`, or `updateLearningProgress`) in your final answer.
             - Keep your internal reasoning concise and focused on concepts; avoid echoing raw UUIDs or `[source_...]` tags inside your thoughts, and reserve `[source_<id>]` citations for your final response.
             - If the topic is not covered in the sources after searching, inform the student clearly.
             
@@ -165,6 +171,7 @@ public class ChatController {
     private final SseNotificationService sseNotificationService;
     private final NotebookContextService notebookContextService;
     private final ExampleQuestionService exampleQuestionService;
+    private final LearningMemoryService learningMemoryService;
     private final UserService userService;
     private final RateLimitService rateLimitService;
     private final ObjectMapper objectMapper;
@@ -200,10 +207,11 @@ public class ChatController {
     }
 
     private ChatClient.ChatClientRequestSpec buildChatPrompt(
+            UUID notebookId,
             ChatMode mode,
             String conversationId,
             @Nullable Long historyParentId,
-            NotebookAgentTools agentTools,
+            Object[] toolObjects,
             List<SourceResponseDTO> scopedSources,
             String userInput,
             @Nullable String responseDetail,
@@ -239,18 +247,59 @@ public class ChatController {
             }
         }
 
-        String preferenceSuffix = buildPreferenceSuffix(responseDetail, customInstructions);
-        if (!preferenceSuffix.isEmpty()) {
-            systemBuilder.append("\nUSER PREFERENCES:\n").append(preferenceSuffix);
+        if (mode == ChatMode.LEARNING) {
+            String learningHint = learningMemoryService.buildTutorMemoryHint(notebookId);
+            if (!learningHint.isEmpty()) {
+                systemBuilder.append("\n\n").append(learningHint);
+            }
         }
 
-        return clientFor(mode).prompt().system(systemBuilder.toString()).tools(agentTools).advisors(advisorSpec -> {
+        String preferenceSuffix = buildPreferenceSuffix(
+                responseDetail,
+                customInstructions,
+                mode == ChatMode.NORMAL ?
+                        learningMemoryService.buildNormalModeGuidance(notebookId) :
+                        ""
+        );
+        if (!preferenceSuffix.isEmpty()) {
+            systemBuilder.append("\n\nUSER PREFERENCES:\n").append(preferenceSuffix);
+        }
+
+        return clientFor(mode).prompt().system(systemBuilder.toString()).tools(toolObjects).advisors(advisorSpec -> {
             advisorSpec.param(ChatMemory.CONVERSATION_ID, conversationId);
             advisorSpec.param(BranchingChatMemoryAdvisor.USE_EXPLICIT_PARENT, Boolean.TRUE);
             if (historyParentId != null) {
                 advisorSpec.param(BranchingChatMemoryAdvisor.PARENT_MESSAGE_ID, historyParentId);
             }
         }).user(userInput);
+    }
+
+    private Object[] buildToolObjects(
+            UUID notebookId,
+            ChatMode mode,
+            NotebookAgentTools agentTools,
+            AgentTraceRecorder traceRecorder
+    ) {
+        List<Object> tools = new ArrayList<>(3);
+        tools.add(agentTools);
+        if (learningMemoryService.isEnabled(notebookId)) {
+            tools.add(new LearningMemoryReadTools(notebookId, learningMemoryService, traceRecorder));
+            if (mode == ChatMode.LEARNING) {
+                tools.add(new LearningMemoryAgentTools(notebookId, learningMemoryService, traceRecorder));
+            }
+        }
+        return tools.toArray();
+    }
+
+    private void recordLearningTurnQuietly(UUID notebookId, ChatMode mode) {
+        if (mode != ChatMode.LEARNING) {
+            return;
+        }
+        try {
+            learningMemoryService.recordLearningTurn(notebookId);
+        } catch (Exception e) {
+            log.warn("Could not record learning turn for notebook {}: {}", notebookId, e.getMessage());
+        }
     }
 
     private List<SourceResponseDTO> resolveScopedSources(UUID notebookId, @Nullable List<UUID> selectedSourceIds) {
@@ -268,7 +317,11 @@ public class ChatController {
                 .toList();
     }
 
-    private static String buildPreferenceSuffix(@Nullable String responseDetail, @Nullable String customInstructions) {
+    private static String buildPreferenceSuffix(
+            @Nullable String responseDetail,
+            @Nullable String customInstructions,
+            @Nullable String learningGuidance
+    ) {
         List<String> directives = new ArrayList<>();
 
         if (responseDetail != null && !responseDetail.isBlank()) {
@@ -279,6 +332,10 @@ public class ChatController {
                 default -> {
                 }
             }
+        }
+
+        if (learningGuidance != null && !learningGuidance.isBlank()) {
+            directives.add(learningGuidance.trim());
         }
 
         if (customInstructions != null && !customInstructions.isBlank()) {
@@ -400,11 +457,14 @@ public class ChatController {
                 chatMessageService.getActiveLeafId(conversationId) :
                 null;
 
+        Object[] toolObjects = buildToolObjects(notebookId, mode, agentTools, traceRecorder);
+
         var chatResponse = buildChatPrompt(
+                notebookId,
                 mode,
                 conversationId,
                 parentId,
-                agentTools,
+                toolObjects,
                 scopedSources,
                 request.userInput(),
                 request.responseDetail(),
@@ -451,6 +511,7 @@ public class ChatController {
                 thinkingSteps,
                 thinkingDurationMs
         );
+        recordLearningTurnQuietly(notebookId, mode);
 
         return ResponseEntity.ok(new ChatReplyMessage(
                 assistantContent,
@@ -726,11 +787,13 @@ public class ChatController {
         );
 
         final Conversation currentConversation = conversation;
+        Object[] toolObjects = buildToolObjects(notebookId, mode, agentTools, traceRecorder);
         var streamResponse = buildChatPrompt(
+                notebookId,
                 mode,
                 conversationId,
                 parentId,
-                agentTools,
+                toolObjects,
                 scopedSources,
                 userInput,
                 responseDetail,
@@ -899,6 +962,7 @@ public class ChatController {
             }
             sink.complete();
 
+            recordLearningTurnQuietly(notebookId, mode);
             publishConversationUpdated(ownerId, notebookId, conversation);
         } catch (Exception e) {
             log.error("Error finalizing chat stream for conversation {}", conversationId, e);

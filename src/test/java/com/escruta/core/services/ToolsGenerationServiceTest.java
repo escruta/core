@@ -64,6 +64,8 @@ class ToolsGenerationServiceTest {
     @Mock
     private NotebookContextService notebookContextService;
     @Mock
+    private LearningMemoryService learningMemoryService;
+    @Mock
     private SseNotificationService sseNotificationService;
     @Mock
     private ChatModel chatModel;
@@ -84,6 +86,7 @@ class ToolsGenerationServiceTest {
                 chunkRepository,
                 retrievalService,
                 notebookContextService,
+                learningMemoryService,
                 sseNotificationService,
                 chatModel,
                 objectMapper,
@@ -92,6 +95,7 @@ class ToolsGenerationServiceTest {
         );
         ReflectionTestUtils.setField(service, "maxConcurrency", 4);
         service.init();
+        lenient().when(learningMemoryService.buildToolGenerationContext(any())).thenReturn("");
         lenient().when(transactionManager.getTransaction(any())).thenReturn(null);
         lenient().when(chatModel.getOptions()).thenReturn(ChatOptions.builder().build());
     }
@@ -315,6 +319,64 @@ class ToolsGenerationServiceTest {
         String sentPromptText = promptCaptor.getValue().getContents();
         assertThat(sentPromptText).contains("ADVANCED");
         assertThat(sentPromptText).contains("Thermodynamic entropy");
+    }
+
+    @Test
+    @DisplayName("Includes notebook learning memory context in generation prompt when available")
+    void processJob_shouldIncludeLearningMemoryContextInPrompt() {
+        UUID jobId = UUID.randomUUID();
+        UUID notebookId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        Notebook notebook = new Notebook();
+        notebook.setId(notebookId);
+        User user = new User();
+        user.setId(userId);
+
+        GenerationOptions options = new GenerationOptions(
+                Difficulty.MEDIUM,
+                DetailLevel.STANDARD,
+                5,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                1
+        );
+
+        GenerationJob job = new GenerationJob(
+                notebook,
+                user,
+                JobType.FLASHCARDS,
+                "Flashcards",
+                false,
+                objectMapper.writeValueAsString(options)
+        );
+        job.setId(jobId);
+
+        when(jobRepository.claimPending(jobId)).thenReturn(1);
+        when(jobRepository.findById(jobId)).thenReturn(Optional.of(job));
+        when(jobRepository.findUserIdById(jobId)).thenReturn(Optional.of(userId));
+        when(jobRepository.findNotebookIdById(jobId)).thenReturn(Optional.of(notebookId));
+        when(notebookContextService.getContext(notebookId, 30)).thenReturn(
+                "Backpropagation computes gradients via the chain rule.");
+        when(learningMemoryService.buildToolGenerationContext(notebookId)).thenReturn(
+                "- LEARNER MEMORY CONTEXT:\n  * Concepts needing reinforcement: Vanishing gradients");
+
+        ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
+        when(chatModel.call(promptCaptor.capture())).thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage(
+                """
+                        {"title":"Gradient Review","flashcards":[{"front":"What causes vanishing gradients?","back":"Repeated small derivatives shrink gradients."}]}
+                        """)))));
+
+        service.processJob(jobId);
+
+        assertThat(job.getStatus()).isEqualTo(JobStatus.COMPLETED);
+        assertThat(promptCaptor.getValue().getContents())
+                .contains("LEARNER MEMORY CONTEXT")
+                .contains("Vanishing gradients");
     }
 
     @Test
